@@ -6,13 +6,14 @@ import pandas as pd
 import urllib.parse
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="SEO Master Pro - Groq Edition", layout="wide")
+st.set_page_config(page_title="SEO Hub Pro - Groq Edition", layout="wide")
 
 with st.sidebar:
     st.title("⚙️ Configuración")
-    st.markdown("Obtén tu llave gratis en [Groq Cloud](https://console.groq.com/)")
+    st.markdown("1. Obtené tu llave en [Groq Cloud](https://console.groq.com/keys)")
     api_key = st.text_input("Pegá tu Groq API Key:", type="password")
-    
+    st.info("Groq es 10x más rápido y tiene límites más amplios.")
+
 def limpiar_json(texto):
     match = re.search(r'\{.*\}', texto, re.DOTALL)
     return match.group(0) if match else None
@@ -20,47 +21,65 @@ def limpiar_json(texto):
 if api_key:
     client = Groq(api_key=api_key)
 
-st.title("🚀 Generador SEO (Powered by Groq)")
-st.markdown("Contenido **Español Neutro** | Imágenes | Marcado Schema JSON-LD")
+st.title("🚀 Generador SEO Internacional (Groq + Llama 3)")
+st.markdown("Contenido en **Español Neutro** | Imágenes | Marcado Schema JSON-LD")
 
-idea_usuario = st.text_input("Tema del artículo:", placeholder="Ej: Guía de inversión en criptomonedas")
+idea_usuario = st.text_input("¿Qué tema desea investigar hoy?", placeholder="Ej: Estrategias de marketing digital 2026")
 
 if idea_usuario and api_key:
-    if st.button("✨ Generar Contenido Completo"):
+    if st.button("✨ Generar Contenido Profesional"):
         try:
-            with st.spinner("Redactando a ultra velocidad con Llama 3..."):
-                # Groq es mucho más rápido, no necesitamos esperar tanto
+            with st.spinner("Redactando a ultra velocidad..."):
+                # Groq es tan rápido que el spinner casi ni se verá
                 prompt = f"""
-                Actúe como experto SEO Senior. Idioma: ESPAÑOL NEUTRO. Tema: '{idea_usuario}'.
-                Entregue ÚNICAMENTE un JSON con:
+                Actúe como experto SEO Senior. Idioma: ESPAÑOL NEUTRO (sin voseo ni regionalismos). 
+                Tema: '{idea_usuario}'.
+                
+                ENTREGUE ÚNICAMENTE UN JSON CON:
                 {{
-                  "h1": "Título", "slug": "url-amigable", "meta": "descripción 150 caracteres",
-                  "intro": "párrafo inicial", "desarrollo": "cuerpo html con h2 y párrafos", "conclusion": "párrafo final",
-                  "faq": [{{"q": "pregunta", "a": "respuesta"}}],
+                  "h1": "Título", 
+                  "slug": "url-amigable", 
+                  "meta": "descripción de 150 caracteres",
+                  "intro": "párrafo inicial atractivo", 
+                  "desarrollo": "cuerpo html con etiquetas h2 y párrafos", 
+                  "conclusion": "párrafo final",
+                  "faq": [
+                    {{"q": "pregunta 1", "a": "respuesta 1"}},
+                    {{"q": "pregunta 2", "a": "respuesta 2"}},
+                    {{"q": "pregunta 3", "a": "respuesta 3"}}
+                  ],
                   "img_prompts": ["prompt1 inglés", "prompt2 inglés", "prompt3 inglés"],
                   "alt_texts": ["alt1", "alt2", "alt3"],
-                  "social": {{"ig": "post ig", "x": "hilo x"}}
+                  "social": {{"ig": "post para instagram", "x": "hilo para X/Twitter"}}
                 }}
                 """
                 
+                # Llamada a Groq usando Llama 3
                 chat_completion = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
-                    model="llama3-70b-8192", # Modelo potente de Meta disponible en Groq
-                    response_format={"type": "json_object"} # Groq soporta modo JSON nativo
+                    model="llama3-70b-8192",
+                    response_format={"type": "json_object"}
                 )
                 
                 data = json.loads(chat_completion.choices[0].message.content)
                 
-                # --- IMÁGENES ---
-                imgs = [f"https://pollinations.ai/p/{urllib.parse.quote(data['img_prompts'][i])}?width=1024&height=768&seed={i+42}" for i in range(3)]
+                # --- GENERACIÓN DE URLs DE IMAGEN ---
+                def get_img(p, s):
+                    p_enc = urllib.parse.quote(p)
+                    return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={s}&model=flux"
+
+                imgs = [get_img(data['img_prompts'][i], i+500) for i in range(3)]
                 
-                # --- SCHEMA ---
-                faq_schema = ", ".join([f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in data['faq']])
-                schema_code = f"""<script type="application/ld+json">
+                # --- MARCADO SCHEMA JSON-LD ---
+                faq_entities = [f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in data['faq']]
+                
+                schema_code = f"""
+<script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "{data['h1']}",
+  "description": "{data['meta']}",
   "image": "{imgs[0]}",
   "author": {{ "@type": "Person", "name": "Admin" }}
 }}
@@ -69,11 +88,11 @@ if idea_usuario and api_key:
 {{
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  "mainEntity": [{faq_schema}]
+  "mainEntity": [{", ".join(faq_entities)}]
 }}
 </script>"""
 
-                # --- HTML PARA BLOGGER ---
+                # --- HTML FINAL PARA BLOGGER ---
                 html_blogger = f"""{schema_code}
 <div class="separator" style="text-align: center;"><img src="{imgs[0]}" alt="{data['alt_texts'][0]}" style="width:100%; border-radius:12px;"/></div>
 <p>{data['intro']}</p>
@@ -81,24 +100,37 @@ if idea_usuario and api_key:
 {data['desarrollo']}
 <div class="separator" style="text-align: center;"><img src="{imgs[2]}" alt="{data['alt_texts'][2]}" style="width:100%; border-radius:12px; margin-top:20px;"/></div>
 <p>{data['conclusion']}</p>
-<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in data['faq']])}</div>"""
+<div class="faq-section">
+    <h2>Preguntas Frecuentes</h2>
+    {''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in data['faq']])}
+</div>"""
 
-                # --- VISTA ---
-                t1, t2 = st.tabs(["📝 Blog (Blogger HTML)", "📸 Redes Sociales"])
+                # --- INTERFAZ DE RESULTADOS ---
+                st.success("¡Generado con éxito en segundos!")
+                t1, t2, t3 = st.tabs(["📝 Post Blogger", "📸 Social Media", "📊 SEO Data"])
+                
                 with t1:
-                    c1, c2 = st.columns([1, 2])
-                    with c1:
+                    col_edit, col_prev = st.columns([1, 2])
+                    with col_edit:
                         st.text_input("H1", data['h1'])
                         st.text_input("Slug", data['slug'])
-                        st.text_area("Meta", data['meta'])
-                        st.download_button("💾 Bajar HTML", html_blogger, file_name=f"{data['slug']}.html")
-                    with c2:
+                        st.text_area("Meta Descripción", data['meta'], height=100)
+                        st.download_button("💾 Bajar archivo .html", html_blogger, file_name=f"{data['slug']}.html")
+                    with col_prev:
+                        st.markdown(f"<h1>{data['h1']}</h1>", unsafe_allow_html=True)
                         st.markdown(html_blogger, unsafe_allow_html=True)
                     st.divider()
+                    st.subheader("Código HTML (Pegar en Blogger)")
                     st.code(html_blogger, language="html")
+                
                 with t2:
-                    st.write("Instagram:", data['social']['ig'])
-                    st.write("X:", data['social']['x'])
+                    st.subheader("Instagram / Facebook")
+                    st.write(data['social']['ig'])
+                    st.subheader("X (Twitter)")
+                    st.write(data['social']['x'])
+                    
+                with t3:
+                    st.json(data)
 
         except Exception as e:
             st.error(f"Error: {e}")
