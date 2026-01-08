@@ -33,14 +33,15 @@ if api_key:
 st.title("🚀 Hub SEO Internacional con Imágenes Automáticas")
 st.markdown("Generación de artículos en **español neutro** con **3 imágenes reales** integradas.")
 
-idea_usuario = st.text_input("¿Sobre qué tema desea investigar?", placeholder="Ej: Avances en energía renovable")
+idea_usuario = st.text_input("¿Qué tema desea investigar?", placeholder="Ej: Avances en energía renovable")
 
 if idea_usuario and api_key and 'model' in locals():
     try:
-        # PASO 1: KEYWORDS
+        # PASO 1: KEYWORDS (Corregido el error de f-string)
         if 'kw_data' not in st.session_state:
             with st.spinner("Analizando métricas..."):
-                prompt_kw = f"Actúe como experto SEO. Para '{idea_usuario}', genere 5 long-tail keywords. Devuelva SOLO JSON: {{"data": [{{"kw": "ejemplo", "vol": "1k", "dif": "20%"}}]}}"
+                # Usamos llaves dobles {{ }} para que Python no las confunda con variables
+                prompt_kw = f"Actúe como experto SEO. Para '{idea_usuario}', genere 5 long-tail keywords. Devuelva SOLO JSON: {{'data': [{{'kw': 'ejemplo', 'vol': '1k', 'dif': '20%'}}]}}"
                 response = model.generate_content(prompt_kw)
                 match = re.search(r'\{.*\}', response.text, re.DOTALL)
                 if match:
@@ -57,6 +58,7 @@ if idea_usuario and api_key and 'model' in locals():
 
             if st.button("✨ Generar Contenido e Imágenes"):
                 with st.spinner("Redactando y creando 3 imágenes..."):
+                    # Prompt final corregido con dobles llaves
                     prompt_final = f"""
                     Actúe como experto SEO global. Idioma: ESPAÑOL NEUTRO. Tema: '{seleccion}'.
                     No mencione países. 
@@ -67,7 +69,7 @@ if idea_usuario and api_key and 'model' in locals():
                     - html_intro: Párrafo de introducción.
                     - html_desarrollo: Cuerpo del post con h2 y párrafos.
                     - html_conclusion: Conclusión final.
-                    - img_prompts: Lista de 3 frases en INGLÉS para generar imágenes (ej: 'modern solar farm, sunny day, high resolution').
+                    - img_prompts: Lista de 3 frases en INGLÉS para generar imágenes.
                     - alt_texts: Lista de 3 textos ALT en español.
                     - ig_post: Post para Instagram.
                     - x_thread: Hilo de Twitter.
@@ -83,12 +85,10 @@ if idea_usuario and api_key and 'model' in locals():
                         imgs = []
                         for i, p in enumerate(data.get('img_prompts', [])):
                             encoded_prompt = urllib.parse.quote(p)
-                            # Usamos Pollinations con seed dinámica para que no sean iguales
                             url = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=768&seed={i+50}&model=flux"
-                            imgs.append({"url": url, "alt": data.get('alt_texts', ["Imagen SEO"]*3)[i]})
+                            imgs.append({{"url": url, "alt": data.get('alt_texts', ["Imagen SEO"]*3)[i]}})
 
                         # --- CONSTRUIR EL HTML FINAL ---
-                        # Insertamos las imágenes de forma garantizada entre las secciones
                         html_completo = f"""
                         <p>{data.get('html_intro', '')}</p>
                         <img src="{imgs[0]['url']}" alt="{imgs[0]['alt']}" style="width:100%; border-radius:10px; margin:20px 0;">
@@ -107,8 +107,6 @@ if idea_usuario and api_key and 'model' in locals():
                                 st.text_input("H1", data.get('h1'))
                                 st.text_input("Slug", data.get('slug'))
                                 st.text_area("Meta", data.get('meta'))
-                                for idx, img in enumerate(imgs):
-                                    st.image(img['url'], caption=f"Imagen {idx+1}")
                             
                             with col_b:
                                 st.subheader("Vista Previa")
@@ -116,14 +114,12 @@ if idea_usuario and api_key and 'model' in locals():
                                 st.markdown(html_completo, unsafe_allow_html=True)
                             
                             st.divider()
-                            st.subheader("Código HTML para Blogger (¡Copiá esto!)")
+                            st.subheader("Código HTML para Blogger")
                             st.code(html_completo, language="html")
 
                         with t2:
                             st.text_area("Instagram", data.get('ig_post'), height=300)
                         with t3:
                             st.text_area("Twitter", data.get('x_thread'), height=300)
-                    else:
-                        st.error("Error al generar el JSON.")
     except Exception as e:
         st.error(f"Error: {e}")
