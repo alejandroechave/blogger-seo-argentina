@@ -5,18 +5,16 @@ import re
 import pandas as pd
 import urllib.parse
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Generador SEO Profesional", layout="wide")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="SEO Master Pro - Blogger Fix", layout="wide")
 
 def limpiar_json(texto):
-    """Extrae el bloque JSON del texto de la IA."""
     try:
         match = re.search(r'\{.*\}', texto, re.DOTALL)
         return match.group(0) if match else None
     except: return None
 
 def get_best_model(client):
-    """Detecta qué modelo de Groq está disponible para evitar el error 404."""
     try:
         available = [m.id for m in client.models.list().data]
         priority = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8k-instant"]
@@ -36,10 +34,10 @@ with st.sidebar:
         st.success(f"Modelo: {st.session_state.active_model}")
 
 # --- APP PRINCIPAL ---
-st.title("🚀 Redactor SEO Profesional")
-st.markdown("Investigación de Keywords + Artículo HTML + Marcado Schema + Imágenes.")
+st.title("🚀 Redactor SEO para Blogger")
+st.markdown("Genera contenido con imágenes que **sí funcionan** en plantillas externas.")
 
-tema = st.text_input("¿Sobre qué quieres escribir?", placeholder="Ej: Beneficios de la meditación")
+tema = st.text_input("¿Sobre qué quieres investigar?", placeholder="Ej: Estrategias de marketing para PYMES")
 
 if tema and api_key:
     # PASO 1: INVESTIGACIÓN
@@ -57,26 +55,24 @@ if tema and api_key:
         except Exception as e:
             st.error(f"Error en investigación: {e}")
 
-    # MOSTRAR RESULTADOS INVESTIGACIÓN
+    # MOSTRAR RESULTADOS
     if 'kw_list' in st.session_state:
-        st.subheader("📊 Keywords Encontradas")
-        df = pd.DataFrame(st.session_state.kw_list)
-        st.table(df)
+        st.subheader("📊 Keywords Sugeridas")
+        st.table(pd.DataFrame(st.session_state.kw_list))
         
-        seleccion = st.selectbox("Elige la keyword para tu artículo:", [i['kw'] for i in st.session_state.kw_list])
+        seleccion = st.selectbox("Elige la keyword principal:", [i['kw'] for i in st.session_state.kw_list])
 
         # PASO 2: REDACCIÓN
-        if st.button("✨ Paso 2: Generar Artículo Completo"):
+        if st.button("✨ Paso 2: Generar Artículo con Imágenes Fix"):
             try:
-                with st.spinner("Redactando post optimizado..."):
+                with st.spinner("Redactando post profesional..."):
                     prompt_art = f"""
                     Eres un redactor SEO senior. Escribe en ESPAÑOL NEUTRO sobre '{seleccion}'.
-                    Regla: No uses voseo ni regionalismos.
                     Devuelve un JSON con:
                     - h1, slug, meta (150 carac).
-                    - intro, desarrollo (HTML con h2), conclusion.
+                    - intro, desarrollo (HTML con h2 y p), conclusion.
                     - faq: [{{q: pregunta, a: respuesta}}] (3 items).
-                    - img_prompts: [3 prompts en inglés para imágenes realistas].
+                    - img_prompts: [3 prompts en inglés detallados para fotos realistas].
                     - alt_texts: [3 textos alt en español].
                     - social: {{ig: post, x: hilo}}.
                     """
@@ -87,12 +83,13 @@ if tema and api_key:
                     )
                     art = json.loads(limpiar_json(response_art.choices[0].message.content))
 
-                    # --- LÓGICA DE IMÁGENES ---
+                    # --- LÓGICA DE IMÁGENES (SISTEMA ANTIBLOQUEO) ---
                     def img_url(p, seed):
-                        p_enc = urllib.parse.quote(p)
-                        return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={seed}&model=flux"
+                        # Limpiamos el prompt para URL
+                        p_safe = urllib.parse.quote(p)
+                        return f"https://pollinations.ai/p/{p_safe}?width=1024&height=768&seed={seed}&model=flux&nologo=true"
 
-                    imgs = [img_url(art['img_prompts'][i], i+10) for i in range(3)]
+                    imgs = [img_url(art['img_prompts'][i], i+50) for i in range(3)]
 
                     # --- SCHEMA JSON-LD ---
                     faq_json = ", ".join([f'{{"@type":"Question","name":"{f["q"]}","acceptedAnswer":{{"@type":"Answer","text":"{f["a"]}"}}}}' for f in art['faq']])
@@ -115,39 +112,60 @@ if tema and api_key:
 }}
 </script>"""
 
-                    # --- HTML FINAL ---
-                    html = f"""{schema}
-<div class="separator" style="text-align: center;"><img src="{imgs[0]}" alt="{art['alt_texts'][0]}" style="width:100%; border-radius:10px;"/></div>
+                    # --- HTML FINAL (OPTIMIZADO PARA BLOGGER) ---
+                    # Usamos etiquetas <a> y style clear para que la plantilla LiteSpot no las oculte
+                    html_blogger = f"""{schema}
+<div class="separator" style="text-align: center; clear: both;">
+<a href="{imgs[0]}" style="margin-left: 1em; margin-right: 1em;">
+<img border="0" data-original-height="768" data-original-width="1024" src="{imgs[0]}" alt="{art['alt_texts'][0]}" style="width: 100%; max-width: 800px; border-radius: 12px;" />
+</a>
+</div>
+
 <p>{art['intro']}</p>
-<div class="separator" style="text-align: center;"><img src="{imgs[1]}" alt="{art['alt_texts'][1]}" style="width:100%; border-radius:10px; margin:20px 0;"/></div>
+
+<div class="separator" style="text-align: center; clear: both;">
+<a href="{imgs[1]}" style="margin-left: 1em; margin-right: 1em;">
+<img border="0" data-original-height="768" data-original-width="1024" src="{imgs[1]}" alt="{art['alt_texts'][1]}" style="width: 100%; max-width: 800px; border-radius: 12px; margin: 20px 0;" />
+</a>
+</div>
+
 {art['desarrollo']}
-<div class="separator" style="text-align: center;"><img src="{imgs[2]}" alt="{art['alt_texts'][2]}" style="width:100%; border-radius:10px; margin-top:20px;"/></div>
+
+<div class="separator" style="text-align: center; clear: both;">
+<a href="{imgs[2]}" style="margin-left: 1em; margin-right: 1em;">
+<img border="0" data-original-height="768" data-original-width="1024" src="{imgs[2]}" alt="{art['alt_texts'][2]}" style="width: 100%; max-width: 800px; border-radius: 12px; margin-top: 20px;" />
+</a>
+</div>
+
 <p>{art['conclusion']}</p>
-<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in art['faq']])}</div>
+
+<div class="faq-section" style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 30px;">
+<h2>Preguntas Frecuentes</h2>
+{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in art['faq']])}
+</div>
 """
 
-                    # --- MOSTRAR RESULTADOS ---
+                    # --- VISTA DE RESULTADOS ---
                     tab1, tab2 = st.tabs(["📝 Blogger HTML", "📸 Redes Sociales"])
                     with tab1:
-                        c1, c2 = st.columns([1, 2])
-                        with c1:
+                        col_info, col_prev = st.columns([1, 2])
+                        with col_info:
                             st.text_input("Título H1", art['h1'])
-                            st.text_area("Meta Descripción", art['meta'])
-                            st.download_button("💾 Bajar HTML", html, file_name=f"{art['slug']}.html")
-                        with c2:
-                            st.markdown(html, unsafe_allow_html=True)
-                        st.divider()
-                        st.subheader("Código para copiar en Blogger")
-                        st.code(html, language="html")
+                            st.text_area("Meta Descripción", art['meta'], height=100)
+                            st.download_button("💾 Bajar HTML", html_blogger, file_name=f"{art['slug']}.html")
+                        with col_prev:
+                            st.markdown("### Vista Previa")
+                            st.markdown(html_blogger, unsafe_allow_html=True)
+                        
+                        st.subheader("Código para copiar (Usar Vista HTML en Blogger)")
+                        st.code(html_blogger, language="html")
                     
                     with tab2:
-                        st.subheader("Instagram")
-                        st.write(art['social']['ig'])
-                        st.subheader("X (Twitter)")
-                        st.write(art['social']['x'])
+                        st.subheader("Contenido para Redes")
+                        st.write("**Instagram:**", art['social']['ig'])
+                        st.write("**X (Twitter):**", art['social']['x'])
 
             except Exception as e:
                 st.error(f"Error en redacción: {e}")
-
 else:
-    st.info("Por favor, ingresa tu API Key de Groq en la barra lateral para comenzar.")
+    st.warning("⚠️ Introduce tu API Key y un tema para comenzar.")
