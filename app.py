@@ -2,91 +2,75 @@ import streamlit as st
 import google.generativeai as genai
 import json
 import re
+import pandas as pd # Agregamos pandas para la tablita
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Creador de Contenido 360", layout="wide")
-
-# Estilo personalizado para mejorar la visualización
-st.markdown("""
-    <style>
-    .main {
-        background-color: #f5f7f9;
-    }
-    .stTextArea textarea {
-        font-size: 16px !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+st.set_page_config(page_title="SEO Master Pro AR", layout="wide")
 
 with st.sidebar:
     st.title("⚙️ Configuración")
     api_key = st.text_input("Pegá tu Gemini API Key:", type="password")
-    st.info("Obtenela gratis en: [aistudio.google.com](https://aistudio.google.com)")
+    st.info("Obtenela en [aistudio.google.com](https://aistudio.google.com)")
 
-# Función para encontrar el modelo disponible en tu cuenta
 def buscar_modelo():
     try:
         for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                return m.name
-    except:
-        return None
+            if 'generateContent' in m.supported_generation_methods: return m.name
+    except: return None
     return None
 
-# Lógica de Inicialización
-model = None
 if api_key:
+    genai.configure(api_key=api_key)
+    modelo_nombre = buscar_modelo()
+    if modelo_nombre: model = genai.GenerativeModel(modelo_nombre)
+
+st.title("🚀 SEO Content Hub Profesional")
+st.markdown("Investigación de palabras clave y redacción multicanal.")
+
+idea_usuario = st.text_input("¿Qué tema querés investigar?", placeholder="Ej: Mejores tarjetas de crédito Argentina")
+
+if idea_usuario and 'model' in locals():
     try:
-        genai.configure(api_key=api_key)
-        modelo_nombre = buscar_modelo()
-        if modelo_nombre:
-            model = genai.GenerativeModel(modelo_nombre)
-            st.sidebar.success(f"Modelo activo: {modelo_nombre}")
-        else:
-            st.sidebar.error("No se encontraron modelos disponibles.")
-    except Exception as e:
-        st.sidebar.error(f"Error de conexión: {e}")
-
-# --- INTERFAZ PRINCIPAL ---
-st.title("🚀 Generador Multi-Canal")
-st.markdown("Escribí un artículo para tu **Blog** y obtené automáticamente los posteos para **Redes Sociales**.")
-
-idea_usuario = st.text_input("¿Sobre qué tema querés crear contenido?", placeholder="Ej: Cómo invertir en Cedears desde Argentina")
-
-if idea_usuario and model:
-    try:
-        # PASO 1: Investigación de Keywords (SEO)
-        if 'keywords' not in st.session_state:
-            with st.spinner("Buscando las mejores keywords para Argentina..."):
-                prompt_kw = f"""Actuá como experto SEO. Generá 5 palabras clave de cola larga para Argentina sobre: '{idea_usuario}'. 
-                Devolvé SOLO un objeto JSON: {{"kw": ["opcion1", "opcion2", "opcion3", "opcion4", "opcion5"]}}"""
+        # PASO 1: KEYWORD RESEARCH CON MÉTRICAS
+        if 'kw_data' not in st.session_state:
+            with st.spinner("Analizando mercado y competencia..."):
+                prompt_kw = f"""Actuá como herramienta SEO (tipo Semrush). 
+                Para el tema '{idea_usuario}' en Argentina, generá 5 variaciones de cola larga.
+                Para cada una, estimá:
+                1. Volumen mensual de búsquedas (ej: 1.5k).
+                2. Dificultad SEO (0-100%).
+                
+                Devolvé SOLO un JSON estrictamente así:
+                {{"data": [
+                    {{"kw": "ejemplo 1", "vol": "1.2k", "dif": "25%"}},
+                    {{"kw": "ejemplo 2", "vol": "800", "dif": "40%"}}
+                ]}}"""
                 
                 response = model.generate_content(prompt_kw)
-                match_kw = re.search(r'\{.*\}', response.text, re.DOTALL)
-                if match_kw:
-                    st.session_state.keywords = json.loads(match_kw.group())['kw']
+                match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                if match:
+                    st.session_state.kw_data = json.loads(match.group())['data']
 
-        if 'keywords' in st.session_state:
-            st.subheader("1. Elegí el enfoque SEO")
-            seleccion = st.radio("Sugerencias de búsqueda real:", st.session_state.keywords)
+        if 'kw_data' in st.session_state:
+            st.subheader("📊 Análisis de Palabras Clave (Estimado)")
+            df = pd.DataFrame(st.session_state.kw_data)
+            df.columns = ["Palabra Clave", "Vol. Búsqueda", "Dificultad (KD)"]
+            st.table(df) # Mostramos la tabla linda
+
+            # Selección de la Keyword
+            opciones = [item['kw'] for item in st.session_state.kw_data]
+            seleccion = st.selectbox("Elegí la Keyword para el artículo:", opciones)
 
             if st.button("✨ Generar Contenido Completo"):
-                with st.spinner("Redactando artículo y redes sociales..."):
-                    # EL PROMPT MAESTRO: Blog + IG + X
+                with st.spinner("Redactando artículo y posts sociales..."):
                     prompt_final = f"""
-                    Sos un redactor profesional senior de Argentina. 
-                    Tema: '{seleccion}'.
-
-                    REGLAS DE ESTILO:
-                    - Usá voseo profesional (vos, tenés, podés). 
-                    - Tono: Educativo, serio y confiable. Sin modismos exagerados (nada de "che" o "laburo").
-
-                    ENTREGÁ EXCLUSIVAMENTE UN JSON CON ESTAS LLAVES:
-                    - h1: Título impactante para el blog.
-                    - html: Cuerpo del post para Blogger (usá h2, h3, p, strong, ul, li).
-                    - meta: Meta descripción de 150 caracteres para Google.
-                    - ig_post: Post para Instagram/FB con emojis, ganchos de lectura y hashtags.
-                    - x_thread: Un hilo de X (Twitter) de 3 o 4 tweets numerados que resuma el post.
+                    Redactor profesional argentino. Tema: '{seleccion}'.
+                    Generá un JSON con:
+                    - h1: Título SEO.
+                    - html: Post para Blogger (profesional, voseo sutil).
+                    - meta: Meta descripción.
+                    - ig_post: Post para Instagram.
+                    - x_thread: Hilo de Twitter.
                     """
                     
                     res_final = model.generate_content(prompt_final)
@@ -94,35 +78,16 @@ if idea_usuario and model:
                     
                     if match_art:
                         data = json.loads(match_art.group())
-                        
                         st.divider()
-                        
-                        # --- PRESENTACIÓN EN PESTAÑAS ---
-                        tab_blog, tab_ig, tab_x = st.tabs(["📝 Artículo Blogger", "📸 Instagram / FB", "🐦 X (Twitter)"])
+                        t1, t2, t3 = st.tabs(["📝 Blog", "📸 Instagram", "🐦 X"])
+                        with t1:
+                            st.header(data.get('h1'))
+                            st.markdown(data.get('html'), unsafe_allow_html=True)
+                            st.code(data.get('html'), language="html")
+                        with t2:
+                            st.text_area("Copiá para IG:", data.get('ig_post'), height=300)
+                        with t3:
+                            st.text_area("Copiá para X:", data.get('x_thread'), height=300)
 
-                        with tab_blog:
-                            st.header(data.get('h1', ''))
-                            st.info(f"**Meta Descripción:** {data.get('meta', '')}")
-                            st.markdown(data.get('html', ''), unsafe_allow_html=True)
-                            st.divider()
-                            st.subheader("Código HTML (Pegar en Blogger)")
-                            st.code(data.get('html', ''), language="html")
-
-                        with tab_ig:
-                            st.subheader("Post para Instagram o Facebook")
-                            st.text_area("Copiá el texto:", data.get('ig_post', ''), height=400)
-                            st.caption("Tip: Usá una imagen llamativa que combine con este texto.")
-
-                        with tab_x:
-                            st.subheader("Hilo para X (Twitter)")
-                            st.text_area("Copiá el hilo:", data.get('x_thread', ''), height=400)
-                            st.success("¡Contenido generado con éxito!")
-
-                    else:
-                        st.error("La IA no devolvió el formato correcto. Probá clickear el botón de nuevo.")
-    
     except Exception as e:
-        st.error(f"Ocurrió un error: {e}")
-
-elif not api_key:
-    st.warning("⚠️ Por favor, ingresá tu API Key en la barra lateral para comenzar.")
+        st.error(f"Error: {e}")
