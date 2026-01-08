@@ -8,22 +8,19 @@ import random
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="SEO Publisher v8", layout="wide")
+st.set_page_config(page_title="SEO Publisher v9", layout="wide")
 
 def clean_json_output(text):
-    """Extrae el JSON de forma ultra-segura."""
     try:
         start = text.find('{')
         end = text.rfind('}') + 1
-        if start != -1 and end != 0:
-            return text[start:end]
-    except:
-        return None
-    return None
+        return text[start:end] if (start != -1 and end != 0) else None
+    except: return None
 
-# --- ESTADO DE SESIÓN ---
+# --- PERSISTENCIA ---
 if 'kw_list' not in st.session_state: st.session_state.kw_list = None
 if 'art_data' not in st.session_state: st.session_state.art_data = None
+if 'img_seed' not in st.session_state: st.session_state.img_seed = random.randint(1, 99999)
 
 with st.sidebar:
     st.title("🔑 Configuración")
@@ -31,86 +28,74 @@ with st.sidebar:
     if api_key:
         client = Groq(api_key=api_key)
 
-st.title("✍️ Publicador SEO de Alta Gama")
+st.title("🚀 Publicador SEO Pro v9")
 
 # --- PASO 1: KEYWORDS ---
-tema_input = st.text_input("Tema base:", placeholder="Ej: Mini PC de oficina 2026")
+tema_input = st.text_input("Tema:", placeholder="Ej: Negocios en Argentina 2026")
 
 if tema_input and api_key:
-    if st.button("🔍 1. Analizar Keywords"):
-        prompt_kw = f"Genera 5 keywords long-tail para '{tema_input}'. Devuelve SOLO un objeto JSON: {{'data': [{{'kw': '...', 'vol': '...', 'dif': '...'}}]}}"
+    if st.button("🔍 1. Buscar Keywords"):
+        prompt_kw = f"Genera 5 keywords long-tail para '{tema_input}'. JSON: {{'data': [{{'kw': '...', 'vol': '...', 'dif': '...'}}]}}"
         res = client.chat.completions.create(messages=[{"role": "user", "content": prompt_kw}], model="llama-3.3-70b-versatile", response_format={"type": "json_object"})
         st.session_state.kw_list = json.loads(clean_json_output(res.choices[0].message.content))['data']
 
     if st.session_state.kw_list:
         st.table(pd.DataFrame(st.session_state.kw_list))
-        seleccion = st.selectbox("Keyword ganadora:", [i['kw'] for i in st.session_state.kw_list])
+        seleccion = st.selectbox("Keyword:", [i['kw'] for i in st.session_state.kw_list])
 
-        # --- PASO 2: GENERACIÓN DE CONTENIDO ---
+        # --- PASO 2: REDACCIÓN ---
         if st.button("📝 2. Generar Artículo Maestro"):
-            with st.spinner("Redactando contenido de alta calidad..."):
+            with st.spinner("Redactando contenido profundo..."):
                 prompt_art = f"""Escribe un artículo SEO experto sobre '{seleccion}'.
-                REQUISITOS:
-                - Extensión: >1000 palabras.
-                - Formato: HTML profesional (H2, H3, tablas, listas).
-                - Incluye un SLUG optimizado para la URL.
-                - Incluye Marcado Schema JSON-LD.
+                REQUISITOS: >1000 palabras, HTML profesional, Slug SEO y Marcado Schema.
+                IMPORTANTE: En 'img_keyword' usa SOLO 1 palabra simple en inglés.
+                Responde JSON: {{"titulo": "..", "slug": "..", "meta": "..", "intro": "..", "cuerpo": "..", "faq": "..", "tags": "..", "img_keyword": ".."}}"""
                 
-                Responde EXCLUSIVAMENTE en JSON con estas llaves:
-                "titulo", "slug", "meta", "intro", "cuerpo", "faq", "tags", "img_prompt"."""
-                
-                res_art = client.chat.completions.create(
-                    messages=[{"role": "user", "content": prompt_art}],
-                    model="llama-3.3-70b-versatile",
-                    response_format={"type": "json_object"}
-                )
+                res_art = client.chat.completions.create(messages=[{"role": "user", "content": prompt_art}], model="llama-3.3-70b-versatile", response_format={"type": "json_object"})
                 st.session_state.art_data = json.loads(clean_json_output(res_art.choices[0].message.content))
 
 # --- PASO 3: RESULTADOS ---
 if st.session_state.art_data:
     art = st.session_state.art_data
     
-    # Construcción de imagen ultra-limpia
-    clean_kw = urllib.parse.quote(art['img_prompt'].strip().replace(" ", "-"))
-    seed = random.randint(1, 99999)
-    url_img = f"https://pollinations.ai/p/{clean_kw}.jpg?width=1024&height=768&seed={seed}&nologo=true"
+    # URL de Imagen Ultra-Simplificada
+    word = art['img_keyword'].strip().replace(" ", "")
+    url_img = f"https://pollinations.ai/p/{word}?width=1024&height=768&seed={st.session_state.img_seed}&nologo=true"
 
-    tab_blogger, tab_seo = st.tabs(["📄 CÓDIGO BLOGGER", "⚙️ DATOS SEO"])
+    tab_code, tab_seo = st.tabs(["📄 CÓDIGO BLOGGER", "⚙️ SEO & PREVIEW"])
 
-    with tab_blogger:
-        # Marcado Schema.org
-        schema_json = {
+    with tab_code:
+        # Schema y HTML unificado
+        schema_markup = {
             "@context": "https://schema.org",
             "@type": "Article",
             "headline": art['titulo'],
             "description": art['meta'],
             "image": url_img,
-            "datePublished": datetime.now().strftime("%Y-%m-%d"),
-            "author": {"@type": "Person", "name": "Alejandro Echave"}
+            "datePublished": datetime.now().strftime("%Y-%m-%d")
         }
         
-        # Bloque HTML unificado
-        html_final = f"""<script type="application/ld+json">{json.dumps(schema_json)}</script>
-<div style="text-align:center; margin-bottom:25px;">
-    <img src="{url_img}" alt="{art['titulo']}" style="width:100%; max-width:850px; border-radius:15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
-</div>
+        full_code = f"""<script type="application/ld+json">{json.dumps(schema_markup)}</script>
+<div style="text-align:center;"><img src="{url_img}" alt="{art['titulo']}" style="width:100%; max-width:850px; border-radius:15px;"/></div>
 <h1>{art['titulo']}</h1>
 <p>{art['intro']}</p>
 {art['cuerpo']}
-<section><h2>Preguntas Frecuentes</h2>{art['faq']}</section>"""
+{art['faq']}"""
         
-        st.subheader("Copia el código completo aquí:")
-        st.code(html_html := html_final, language="html")
+        st.subheader("Código para 'Vista HTML' en Blogger:")
+        st.code(full_code, language="html")
 
     with tab_seo:
         col1, col2 = st.columns(2)
         with col1:
-            st.write("**Slug (URL):**")
+            st.write("**Slug sugerido:**")
             st.code(art['slug'])
             st.write("**Etiquetas:**")
             st.info(art['tags'])
+            if st.button("🔄 Cambiar Imagen"):
+                st.session_state.img_seed = random.randint(1, 99999)
+                st.rerun()
         with col2:
-            st.write("**Meta Descripción:**")
-            st.info(art['meta'])
             st.write("**Vista Previa Imagen:**")
             st.image(url_img)
+            st.caption(f"URL: {url_img}")
