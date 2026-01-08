@@ -2,75 +2,104 @@ import streamlit as st
 from groq import Groq
 import json
 import re
-
-st.set_page_config(page_title="Blogger SEO Fix", layout="wide")
-
-# --- FUNCIONES DE APOYO ---
-def get_model(client):
-    return "llama-3.3-70b-versatile" # Forzamos el mejor modelo
-
-def clean_url(text):
-    # Limpia el texto para que la URL de la imagen sea ultra simple
-    return re.sub(r'[^a-z]', '-', text.lower()).strip('-')
+import pandas as pd
 
 # --- CONFIGURACIÓN ---
+st.set_page_config(page_title="Redactor SEO Pro", layout="wide")
+
+def clean_json(text):
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    return match.group(0) if match else None
+
+# --- SIDEBAR ---
 with st.sidebar:
+    st.title("⚙️ Configuración")
     api_key = st.text_input("Groq API Key:", type="password")
     if api_key:
         client = Groq(api_key=api_key)
 
-st.title("🚀 Redactor Pro para Blogger (LiteSpot Fix)")
+# --- APP ---
+st.title("🚀 Redactor SEO con Imágenes Estables")
 
-tema = st.text_input("Tema del post:")
+tema = st.text_input("¿Qué quieres escribir hoy?", placeholder="Ej: Mejores herramientas IA 2026")
 
 if tema and api_key:
-    if st.button("Generar Post e Imágenes"):
+    # 1. KEYWORDS
+    if st.button("🔍 1. Buscar Keywords"):
         try:
-            with st.spinner("Creando contenido..."):
-                prompt = f"""Escribe un post SEO sobre '{tema}'. 
-                Responde SOLO con un JSON: 
-                {{
-                  "titulo": "...", 
-                  "cuerpo": "HTML con h2 y p", 
-                  "img_keyword": "2 palabras en ingles para la foto",
-                  "meta": "resumen 150 carac"
-                }}"""
-                
-                res = client.chat.completions.create(
-                    messages=[{"role": "user", "content": prompt}],
-                    model="llama-3.3-70b-versatile",
-                    response_format={"type": "json_object"}
-                )
-                
-                data = json.loads(res.choices[0].message.content)
-                
-                # --- GENERADOR DE IMAGEN ULTRA-SIMPLE (FIX PARA LITESPOT) ---
-                kw_limpia = clean_url(data['img_keyword'])
-                # Usamos una URL de pollinations sin parámetros complejos que rompan el feed de Blogger
-                img_url = f"https://pollinations.ai/p/{kw_limpia}.jpg" 
+            prompt_kw = f"Genera 5 keywords long-tail para '{tema}'. Devuelve SOLO JSON: {{'data': [{{'kw': '...', 'vol': '...', 'dif': '...'}}]}}"
+            chat_kw = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt_kw}],
+                model="llama-3.3-70b-versatile",
+                response_format={"type": "json_object"}
+            )
+            st.session_state.kw_list = json.loads(clean_json(chat_kw.choices[0].message.content))['data']
+        except Exception as e:
+            st.error(f"Error en keywords: {e}")
 
-                # --- HTML FINAL COMPATIBLE CON BLOGGER ---
-                # Importante: Usamos la estructura que Blogger prefiere para miniaturas
-                html_blogger = f"""
-<div class="separator" style="clear: both; text-align: center;">
-<a href="{img_url}" imageanchor="1" style="margin-left: 1em; margin-right: 1em;">
-<img border="0" src="{img_url}" width="640" height="480" data-original-width="1024" data-original-height="768" />
-</a>
+    if 'kw_list' in st.session_state:
+        st.subheader("📊 Keywords Sugeridas")
+        st.table(pd.DataFrame(st.session_state.kw_list))
+        seleccion = st.selectbox("Selecciona la Keyword Principal:", [i['kw'] for i in st.session_state.kw_list])
+
+        # 2. ARTÍCULO E IMÁGENES
+        if st.button("✨ 2. Generar Artículo Completo"):
+            try:
+                with st.spinner("Redactando y diseñando imágenes..."):
+                    prompt_art = f"""
+                    Actúa como Redactor SEO. Escribe sobre '{seleccion}'.
+                    Devuelve SOLO JSON con:
+                    - h1: título
+                    - intro: párrafo
+                    - desarrollo: HTML (h2 y p)
+                    - slug: url-amigable
+                    - img_concept: concepto de 2 palabras en INGLES (ej: 'modern laptop')
+                    - alt: texto alternativo
+                    """
+                    chat_art = client.chat.completions.create(
+                        messages=[{"role": "user", "content": prompt_art}],
+                        model="llama-3.3-70b-versatile",
+                        response_format={"type": "json_object"}
+                    )
+                    art = json.loads(clean_json(chat_art.choices[0].message.content))
+
+                    # --- SISTEMA DE IMAGEN ESTABLE ---
+                    # Limpiamos el concepto para que la URL sea infalible
+                    clean_concept = re.sub(r'[^a-zA-Z]', '-', art['img_concept']).lower()
+                    # Usamos una URL de Pollinations que Blogger acepta mejor
+                    img_url = f"https://pollinations.ai/p/{clean_concept}?width=1080&height=720&nologo=true"
+
+                    # --- CONSTRUCCIÓN HTML ---
+                    html_final = f"""
+<div style="text-align: center; margin-bottom: 20px;">
+    <img alt="{art['alt']}" src="{img_url}" style="width: 100%; max-width: 800px; border-radius: 10px;" />
 </div>
 
-<br/>
-{data['cuerpo']}
+<h2>{art['h1']}</h2>
+<p><i>{art['intro']}</i></p>
 
-<p><strong>Resumen:</strong> {data['meta']}</p>
+{art['development'] if 'development' in art else art['desarrollo']}
+
+<div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+    <p><strong>Palabra Clave:</strong> {seleccion}</p>
+</div>
 """
-                
-                st.subheader(data['titulo'])
-                st.markdown(html_blogger, unsafe_allow_html=True)
-                
-                st.divider()
-                st.subheader("📋 Código para copiar en Blogger")
-                st.info("Copia el código de abajo. En Blogger, crea una 'Nueva Entrada', cambia a 'Vista HTML' y pega esto.")
-                st.code(html_blogger, language="html")
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+                    # --- VISTA DE RESULTADOS ---
+                    st.divider()
+                    col1, col2 = st.columns([1, 1])
+                    
+                    with col1:
+                        st.subheader("Vista Previa")
+                        st.markdown(html_final, unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.subheader("Código para Blogger")
+                        st.info("Copia esto y pégalo en la 'Vista HTML' de tu entrada.")
+                        st.code(html_final, language="html")
+
+            except Exception as e:
+                st.error(f"Error en redacción: {e}")
+
+else:
+    st.info("Ingresa tu API Key de Groq y un tema para empezar.")
