@@ -39,7 +39,7 @@ if idea_usuario and api_key and 'model' in locals():
     try:
         if 'kw_data' not in st.session_state:
             with st.spinner("Analizando métricas globales..."):
-                prompt_kw = f"Actúe como experto SEO. Para '{idea_usuario}', genere 5 long-tail keywords. Deuelva SOLO JSON: {{'data': [{{'kw': 'ejemplo', 'vol': '1k', 'dif': '20%'}}]}}"
+                prompt_kw = f"Actúe como experto SEO. Para '{idea_usuario}', genere 7 long-tail keywords. Deuelva SOLO JSON: {{'data': [{{'kw': 'ejemplo', 'vol': '1k', 'dif': '20%'}}]}}"
                 response = model.generate_content(prompt_kw)
                 clean_kw = limpiar_json(response.text)
                 if clean_kw:
