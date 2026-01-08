@@ -4,105 +4,115 @@ import json
 import re
 import pandas as pd
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="SEO Master Content Gen", layout="wide")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="SEO Writer Pro", layout="wide")
 
-def clean_json(text):
-    # Elimina posibles textos fuera de las llaves y corrige errores comunes de sintaxis
-    text = re.search(r'\{.*\}', text, re.DOTALL)
-    if not text: return None
-    content = text.group(0)
-    # Corregir error específico de la IA (paréntesis en vez de llave)
+def fix_json_syntax(text):
+    """Limpia y corrige errores comunes de la IA en el JSON."""
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if not match: return None
+    content = match.group(0)
+    # Corrige el error común de cerrar con paréntesis en lugar de llaves
     content = content.replace('),', '},').replace(')]', '}]')
     return content
 
-# --- SESSION STATE ---
+# --- PERSISTENCIA DE DATOS ---
 if 'art_data' not in st.session_state: st.session_state.art_data = None
 if 'kw_list' not in st.session_state: st.session_state.kw_list = None
 
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("⚙️ Configuración")
+    st.title("🔑 Credenciales")
     api_key = st.text_input("Groq API Key:", type="password")
     if api_key:
         client = Groq(api_key=api_key)
 
-st.title("🚀 Generador de Contenido SEO Profesional")
+# --- APLICACIÓN ---
+st.title("✍️ Redactor SEO de Alto Impacto")
+st.markdown("Genera artículos extensos (>800 palabras) con gestión de imágenes independiente.")
 
-tema = st.text_input("Tema a tratar:", placeholder="Ej: Redes sociales para PYMES")
+tema = st.text_input("Tema principal del artículo:", placeholder="Ej: Guía de Ciberseguridad para 2026")
 
 if tema and api_key:
-    # 1. KEYWORDS
-    if st.button("🔍 1. Investigar Keywords"):
+    # 1. PASO DE KEYWORDS
+    if st.button("🔍 Investigar Keywords"):
         try:
             prompt_kw = f"Genera 5 keywords long-tail para '{tema}'. Responde solo JSON: {{'data': [{{'kw': '...', 'vol': '...', 'dif': '...'}}]}}"
-            chat_kw = client.chat.completions.create(
+            res = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt_kw}],
                 model="llama-3.3-70b-versatile",
                 response_format={"type": "json_object"}
             )
-            st.session_state.kw_list = json.loads(clean_json(chat_kw.choices[0].message.content))['data']
-        except Exception as e: st.error(f"Error: {e}")
+            st.session_state.kw_list = json.loads(res.choices[0].message.content)['data']
+        except Exception as e:
+            st.error(f"Error en Keywords: {e}")
 
     if st.session_state.kw_list:
-        st.subheader("📊 Estrategia de Keywords")
-        st.table(pd.DataFrame(st.session_state.kw_list))
-        seleccion = st.selectbox("Keyword para el artículo:", [i['kw'] for i in st.session_state.kw_list])
+        df = pd.DataFrame(st.session_state.kw_list)
+        st.table(df)
+        seleccion = st.selectbox("Elige tu keyword principal:", [i['kw'] for i in st.session_state.kw_list])
 
-        # 2. ARTÍCULO
-        if st.button("📝 2. Redactar Artículo Extenso"):
+        # 2. PASO DE REDACCIÓN
+        if st.button("📝 Generar Artículo Extenso"):
             try:
-                with st.spinner("Redactando artículo premium..."):
-                    prompt_art = f"""Escribe un artículo SEO extenso (>800 palabras) sobre '{seleccion}'. 
-                    Responde EXCLUSIVAMENTE en formato JSON con esta estructura exacta:
-                    {{
-                      "h1": "título",
-                      "meta": "descripción 150 carac",
-                      "introduccion": "párrafo largo",
-                      "cuerpo_html": "Mínimo 4 secciones H2 con párrafos extensos y listas",
-                      "faq_html": "Lista de 5 preguntas frecuentes en HTML",
-                      "img_prompts": ["3 prompts detallados en INGLÉS", "ej: 'realistic office social media marketing'"],
-                      "social": {{"ig": "post texto", "x": "hilo"}}
-                    }}"""
-                    
-                    chat_art = client.chat.completions.create(
+                with st.spinner("Redactando contenido profundo... esto puede tardar unos segundos..."):
+                    prompt_art = f"""Escribe un artículo SEO de más de 800 palabras sobre '{seleccion}'.
+                    Usa un tono profesional. Responde únicamente en JSON con estas llaves:
+                    - h1: Titulo
+                    - meta: Meta descripción
+                    - introduccion: Párrafo largo y cautivador
+                    - contenido_html: El cuerpo del artículo con al menos 4 H2, listas de puntos y párrafos detallados.
+                    - faq_html: 5 preguntas y respuestas en formato HTML.
+                    - prompts_imagenes: [3 descripciones cortas en INGLÉS para fotos realistas].
+                    - redes: {{"ig": "copy para instagram", "x": "hilo para x"}}
+                    """
+                    res_art = client.chat.completions.create(
                         messages=[{"role": "user", "content": prompt_art}],
                         model="llama-3.3-70b-versatile",
                         response_format={"type": "json_object"}
                     )
                     
-                    raw_content = chat_art.choices[0].message.content
-                    cleaned_content = clean_json(raw_content)
-                    st.session_state.art_data = json.loads(cleaned_content)
+                    raw_json = res_art.choices[0].message.content
+                    fixed_json = fix_json_syntax(raw_json)
+                    st.session_state.art_data = json.loads(fixed_json)
             except Exception as e:
-                st.error(f"Error en redacción: {e}")
-                st.expander("Ver error técnico").code(raw_content)
+                st.error("Error al procesar el artículo. Reintenta.")
+                st.expander("Detalle del error").code(str(e))
 
-    # 3. MOSTRAR RESULTADOS
+    # 3. INTERFAZ DE RESULTADOS (PESTAÑAS)
     if st.session_state.art_data:
         art = st.session_state.art_data
-        tab_blog, tab_imgs, tab_social = st.tabs(["📝 Artículo para Blogger", "🖼️ Imágenes", "📱 Redes"])
+        tab1, tab2, tab3 = st.tabs(["📄 Contenido para Blogger", "🖼️ Imágenes Generadas", "📱 Redes Sociales"])
 
-        with tab_blog:
-            html_final = f"<h1>{art['h1']}</h1>\n{art['introduccion']}\n{art['cuerpo_html']}\n{art['faq_html']}"
-            st.markdown(html_final, unsafe_allow_html=True)
+        with tab1:
+            # Construimos el código final una sola vez
+            full_html = f"<h1>{art['h1']}</h1>\n{art['introduccion']}\n{art['contenido_html']}\n{art['faq_html']}"
+            
+            st.success("✅ Artículo generado. Copia el código al final de esta pestaña.")
+            st.markdown("### Vista Previa del Artículo")
+            st.markdown(full_html, unsafe_allow_html=True)
+            
             st.divider()
-            st.subheader("Código para copiar en Vista HTML de Blogger")
-            st.code(html_final, language="html")
+            st.subheader("📋 Código Fuente (Pegar en Vista HTML de Blogger)")
+            st.code(full_html, language="html")
 
-        with tab_imgs:
-            st.subheader("🖼️ Imágenes para tu post")
-            prompts = art.get('img_prompts', [])
+        with tab2:
+            st.subheader("🖼️ Galería de Imágenes")
+            st.info("Estas imágenes se basan en los prompts generados para tu artículo.")
+            
+            prompts = art.get('prompts_imagenes', [])
             cols = st.columns(len(prompts)) if prompts else st.columns(1)
             
-            for idx, p in enumerate(prompts):
-                with cols[idx]:
-                    # Limpieza para Pollinations
+            for i, p in enumerate(prompts):
+                with cols[i]:
                     p_url = re.sub(r'[^a-zA-Z]', '-', p).lower()
-                    img_url = f"https://pollinations.ai/p/{p_url}?width=1024&height=768&seed={idx+42}&nologo=true"
-                    st.image(img_url, caption=f"Prompt: {p}")
-                    st.code(f'<div style="text-align:center;"><img src="{img_url}" style="width:100%; max-width:800px; border-radius:10px;" /></div>', language="html")
+                    img_url = f"https://pollinations.ai/p/{p_url}?width=1024&height=768&seed={i+77}&nologo=true"
+                    st.image(img_url, caption=f"Imagen {i+1}")
+                    st.caption("Código para insertar esta imagen:")
+                    st.code(f'<div style="text-align:center;"><img src="{img_url}" style="width:100%; max-width:800px; border-radius:12px;" /></div>', language="html")
 
-        with tab_social:
-            st.write("**Instagram:**", art['social']['ig'])
+        with tab3:
+            st.subheader("📱 Copys para Redes")
+            st.write("**Instagram:**", art['redes']['ig'])
             st.divider()
-            st.write("**X (Twitter):**", art['social']['x'])
+            st.write("**X (Twitter):**", art['redes']['x'])
