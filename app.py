@@ -7,29 +7,18 @@ import time
 import urllib.parse
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="SEO Hub Pro - Schema Edition", layout="wide")
+st.set_page_config(page_title="SEO Hub Pro - Ultra-Fast", layout="wide")
 
 with st.sidebar:
     st.title("⚙️ Configuración")
     api_key = st.text_input("Pegá tu Gemini API Key:", type="password")
-    st.info("Nota: Esta versión incluye Marcado Schema JSON-LD para SEO avanzado.")
+    st.warning("⚠️ Límite de cuota: Si ves el error 429, esperá al menos 30 segundos. Esta versión usa la mitad de recursos.")
 
 def buscar_modelo():
     try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods: return m.name
+        # Intentamos usar el modelo 1.5 Flash que suele tener cuotas más amplias que el 2.0
+        return 'gemini-1.5-flash'
     except: return None
-    return None
-
-def llamar_gemini_con_reintento(prompt, model, max_retries=3):
-    for i in range(max_retries):
-        try:
-            return model.generate_content(prompt)
-        except Exception as e:
-            if "429" in str(e) and i < max_retries - 1:
-                time.sleep(i + 5)
-                continue
-            raise e
 
 def limpiar_json(texto):
     match = re.search(r'\{.*\}', texto, re.DOTALL)
@@ -37,125 +26,116 @@ def limpiar_json(texto):
 
 if api_key:
     genai.configure(api_key=api_key)
-    modelo_nombre = buscar_modelo()
-    if modelo_nombre: model = genai.GenerativeModel(modelo_nombre)
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
-st.title("🚀 Generador SEO con Marcado Schema")
-st.markdown("Contenido en **español neutro** + Imágenes + **Datos Estructurados JSON-LD**.")
+st.title("🚀 Hub SEO Internacional: Paso Único")
+st.markdown("Generación completa de Keywords, Artículo, Schema e Imágenes en **un solo clic**.")
 
-idea_usuario = st.text_input("¿Qué tema desea investigar?", placeholder="Ej: Guía de alimentación saludable")
+idea_usuario = st.text_input("¿Qué tema desea investigar?", placeholder="Ej: Avances en medicina robótica")
 
-if idea_usuario and api_key and 'model' in locals():
-    try:
-        if 'kw_data' not in st.session_state:
-            with st.spinner("Analizando Keywords..."):
-                prompt_kw = f"Actúe como experto SEO. Para '{idea_usuario}', genere 5 long-tail keywords. Deuelva SOLO JSON: {{'data': [{{'kw': 'ejemplo', 'vol': '1k', 'dif': '20%'}}]}}"
-                response = llamar_gemini_con_reintento(prompt_kw, model)
-                clean_kw = limpiar_json(response.text)
-                if clean_kw: st.session_state.kw_data = json.loads(clean_kw)['data']
-
-        if 'kw_data' in st.session_state:
-            st.subheader("📊 Tabla de Keywords")
-            df = pd.DataFrame(st.session_state.kw_data)
-            st.table(df)
-
-            seleccion = st.selectbox("Seleccione su Keyword:", [item['kw'] for item in st.session_state.kw_data])
-
-            if st.button("✨ Generar Post con Schema"):
-                with st.spinner("Redactando contenido con datos estructurados..."):
-                    prompt_final = f"""
-                    Actúe como redactor SEO senior. Idioma: ESPAÑOL NEUTRO. Tema: '{seleccion}'.
-                    REGLA: No mencione países ni use voseo.
-                    ENTREGUE UN JSON ESTRICTO CON:
-                    - h1, slug, meta.
-                    - intro, desarrollo, conclusion.
-                    - faq: Un array de 3 objetos con 'pregunta' y 'respuesta'.
-                    - img_p1, img_p2, img_p3 (prompts en inglés).
-                    - alt_texts: Lista de 3 textos ALT en español.
-                    - ig_post, x_thread.
-                    """
-                    
-                    res_final = llamar_gemini_con_reintento(prompt_final, model)
-                    data = json.loads(limpiar_json(res_final.text))
+if idea_usuario and api_key:
+    if st.button("✨ Generar Todo el Contenido (Ahorro de Cuota)"):
+        try:
+            with st.spinner("Procesando investigación y redacción..."):
+                # PROMPT CONSOLIDADO: Una sola llamada para todo
+                prompt_unico = f"""
+                Actúe como experto SEO Senior. Idioma: ESPAÑOL NEUTRO. Tema base: '{idea_usuario}'.
+                
+                REALICE LO SIGUIENTE Y ENTREGUE ÚNICAMENTE UN JSON:
+                1. 3 Keywords de cola larga con volumen est. y dificultad.
+                2. Un artículo (H1, Slug, Meta descripción).
+                3. Cuerpo del post: Introducción, Desarrollo (con H2) y Conclusión.
+                4. 3 Preguntas Frecuentes (FAQ).
+                5. 3 Prompts de imagen en INGLÉS y 3 Textos ALT en español.
+                6. Posts para IG y X.
+                
+                JSON ESTRUCTURA:
+                {{
+                  "keywords": [{{"kw": "...", "vol": "...", "dif": "..."}}],
+                  "h1": "...", "slug": "...", "meta": "...",
+                  "intro": "...", "desarrollo": "...", "conclusion": "...",
+                  "faq": [{{"q": "...", "a": "..."}}],
+                  "img_prompts": ["...", "...", "..."],
+                  "alt_texts": ["...", "...", "..."],
+                  "social": {{"ig": "...", "x": "..."}}
+                }}
+                """
+                
+                response = model.generate_content(prompt_unico)
+                data_str = limpiar_json(response.text)
+                
+                if data_str:
+                    data = json.loads(data_str)
                     
                     # --- LÓGICA DE IMÁGENES ---
-                    def get_img_url(p, s):
+                    def get_img(p, s):
                         p_enc = urllib.parse.quote(p)
-                        return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={s}&model=flux"
+                        return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={s}"
 
-                    img1 = get_img_url(data['img_p1'], 11)
-                    img2 = get_img_url(data['img_p2'], 22)
-                    img3 = get_img_url(data['img_p3'], 33)
-
-                    # --- CONSTRUCCIÓN DEL MARCADO SCHEMA JSON-LD ---
-                    preguntas_faq = data.get('faq', [])
-                    faq_entities = [f'{{ "@type": "Question", "name": "{f["pregunta"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["respuesta"]}" }} }}' for f in preguntas_faq]
+                    imgs = [get_img(data['img_prompts'][i], i+100) for i in range(3)]
                     
-                    schema_json = f"""
+                    # --- SCHEMA JSON-LD ---
+                    faq_list = data.get('faq', [])
+                    faq_schema = ", ".join([f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in faq_list])
+                    
+                    schema_block = f"""
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "{data['h1']}",
   "description": "{data['meta']}",
-  "image": "{img1}",
-  "author": {{ "@type": "Person", "name": "Admin" }},
-  "publisher": {{ "@type": "Organization", "name": "Blog SEO" }}
+  "image": "{imgs[0]}",
+  "author": {{ "@type": "Person", "name": "Admin" }}
 }}
 </script>
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  "mainEntity": [{", ".join(faq_entities)}]
+  "mainEntity": [{faq_schema}]
 }}
-</script>
-                    """
+</script>"""
 
-                    # --- CONSTRUCCIÓN DEL HTML PARA BLOGGER ---
+                    # --- CONSTRUCCIÓN HTML BLOGGER ---
                     html_blogger = f"""
-{schema_json}
-<div class="separator" style="clear: both; text-align: center;">
-    <img border="0" src="{img1}" alt="{data['alt_texts'][0]}" style="width: 100%; border-radius: 10px;" />
-</div>
+{schema_block}
+<div class="separator" style="text-align: center;"><img src="{imgs[0]}" alt="{data['alt_texts'][0]}" style="width:100%; border-radius:12px;"/></div>
 <p>{data['intro']}</p>
-
-<div class="separator" style="clear: both; text-align: center;">
-    <img border="0" src="{img2}" alt="{data['alt_texts'][1]}" style="width: 100%; border-radius: 10px; margin: 20px 0;" />
-</div>
+<div class="separator" style="text-align: center;"><img src="{imgs[1]}" alt="{data['alt_texts'][1]}" style="width:100%; border-radius:12px; margin:20px 0;"/></div>
 {data['desarrollo']}
-
-<div class="separator" style="clear: both; text-align: center;">
-    <img border="0" src="{img3}" alt="{data['alt_texts'][2]}" style="width: 100%; border-radius: 10px; margin-top: 20px;" />
-</div>
+<div class="separator" style="text-align: center;"><img src="{imgs[2]}" alt="{data['alt_texts'][2]}" style="width:100%; border-radius:12px; margin-top:20px;"/></div>
 <p>{data['conclusion']}</p>
-
-<div class="faq-section">
-    <h2>Preguntas Frecuentes</h2>
-    {''.join([f"<h3>{f['pregunta']}</h3><p>{f['respuesta']}</p>" for f in preguntas_faq])}
-</div>
+<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in faq_list])}</div>
                     """
 
-                    # --- INTERFAZ ---
-                    tab1, tab2 = st.tabs(["📝 Blog & Schema", "📸 Social Media"])
+                    # --- VISTA ---
+                    st.success("¡Contenido generado con éxito!")
+                    
+                    tab1, tab2, tab3 = st.tabs(["📝 Blogger & SEO", "📊 Keywords", "📸 Social"])
+                    
                     with tab1:
-                        col1, col2 = st.columns([1, 2])
-                        with col1:
-                            st.subheader("SEO Avanzado")
-                            st.text_input("Título", data['h1'])
+                        c1, c2 = st.columns([1, 2])
+                        with c1:
+                            st.subheader("SEO & Slug")
+                            st.text_input("H1", data['h1'])
                             st.text_input("Slug", data['slug'])
                             st.text_area("Meta", data['meta'])
                             st.download_button("💾 Bajar HTML", html_blogger, file_name=f"{data['slug']}.html")
-                        with col2:
-                            st.markdown(f"<h1>{data['h1']}</h1>", unsafe_allow_html=True)
+                        with c2:
                             st.markdown(html_blogger, unsafe_allow_html=True)
                         st.divider()
-                        st.subheader("Código HTML con Schema (Pegar en Blogger)")
+                        st.subheader("Código para Blogger")
                         st.code(html_blogger, language="html")
-
+                        
                     with tab2:
-                        st.text_area("Instagram", data['ig_post'], height=200)
-                        st.text_area("X Hilo", data['x_thread'], height=200)
+                        st.table(pd.DataFrame(data['keywords']))
+                    
+                    with tab3:
+                        st.subheader("Instagram")
+                        st.write(data['social']['ig'])
+                        st.subheader("X (Twitter)")
+                        st.write(data['social']['x'])
 
-    except Exception as e:
-        st.error(f"Error: {e}")
+        except Exception as e:
+            st.error(f"Error: {e}. Probablemente la cuota diaria se agotó. Intenta mañana o usa otra API Key.")
