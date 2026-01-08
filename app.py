@@ -5,106 +5,149 @@ import re
 import pandas as pd
 import urllib.parse
 
-# --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="SEO Master Pro - Canva Workflow", layout="wide")
+# --- CONFIGURACIÓN ---
+st.set_page_config(page_title="Generador SEO Profesional", layout="wide")
 
-with st.sidebar:
-    st.title("⚙️ Configuración")
-    api_key = st.text_input("Pegá tu Groq API Key:", type="password")
+def limpiar_json(texto):
+    """Extrae el bloque JSON del texto de la IA."""
+    try:
+        match = re.search(r'\{.*\}', texto, re.DOTALL)
+        return match.group(0) if match else None
+    except: return None
 
 def get_best_model(client):
+    """Detecta qué modelo de Groq está disponible para evitar el error 404."""
     try:
-        available_models = [m.id for m in client.models.list().data]
+        available = [m.id for m in client.models.list().data]
         priority = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8k-instant"]
-        for model_id in priority:
-            if model_id in available_models: return model_id
-        return available_models[0]
+        for m in priority:
+            if m in available: return m
+        return available[0]
     except: return "llama-3.1-8k-instant"
 
-if api_key:
-    client = Groq(api_key=api_key)
-    if 'active_model' not in st.session_state:
-        st.session_state.active_model = get_best_model(client)
+# --- SIDEBAR ---
+with st.sidebar:
+    st.title("⚙️ Configuración")
+    api_key = st.text_input("Groq API Key:", type="password")
+    if api_key:
+        client = Groq(api_key=api_key)
+        if 'active_model' not in st.session_state:
+            st.session_state.active_model = get_best_model(client)
+        st.success(f"Modelo: {st.session_state.active_model}")
 
-st.title("🚀 SEO Hub: Contenido Pro + Guía Canva")
+# --- APP PRINCIPAL ---
+st.title("🚀 Redactor SEO Profesional")
+st.markdown("Investigación de Keywords + Artículo HTML + Marcado Schema + Imágenes.")
 
-idea_usuario = st.text_input("Tema de investigación:", placeholder="Ej: Decoración de interiores minimalista")
+tema = st.text_input("¿Sobre qué quieres escribir?", placeholder="Ej: Beneficios de la meditación")
 
-if idea_usuario and api_key:
-    # PASO 1: KEYWORDS
-    if 'kw_data' not in st.session_state or st.session_state.get('last_topic') != idea_usuario:
-        if st.button("🔍 Analizar Keywords"):
-            try:
-                prompt_kw = f"Genera 5 keywords long-tail para '{idea_usuario}'. JSON: {{ 'data': [ {{ 'kw': '...', 'vol': '...', 'dif': '...' }} ] }}"
-                res_kw = client.chat.completions.create(
+if tema and api_key:
+    # PASO 1: INVESTIGACIÓN
+    if st.button("🔍 Paso 1: Investigar Keywords"):
+        try:
+            with st.spinner("Buscando keywords ganadoras..."):
+                prompt_kw = f"Actúa como experto SEO. Genera 5 keywords long-tail para '{tema}'. Devuelve SOLO JSON: {{'data': [{{'kw': '...', 'vol': '...', 'dif': '...'}}]}}"
+                response = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt_kw}],
                     model=st.session_state.active_model,
                     response_format={"type": "json_object"}
                 )
-                st.session_state.kw_data = json.loads(res_kw.choices[0].message.content)['data']
-                st.session_state.last_topic = idea_usuario
-            except Exception as e: st.error(f"Error: {e}")
+                data_kw = json.loads(limpiar_json(response.choices[0].message.content))
+                st.session_state.kw_list = data_kw['data']
+        except Exception as e:
+            st.error(f"Error en investigación: {e}")
 
-    if 'kw_data' in st.session_state:
-        st.table(pd.DataFrame(st.session_state.kw_data))
-        seleccion = st.selectbox("Keyword principal:", [item['kw'] for item in st.session_state.kw_data])
+    # MOSTRAR RESULTADOS INVESTIGACIÓN
+    if 'kw_list' in st.session_state:
+        st.subheader("📊 Keywords Encontradas")
+        df = pd.DataFrame(st.session_state.kw_list)
+        st.table(df)
+        
+        seleccion = st.selectbox("Elige la keyword para tu artículo:", [i['kw'] for i in st.session_state.kw_list])
 
         # PASO 2: REDACCIÓN
-        if st.button("✨ Generar Post y Prompts de Diseño"):
+        if st.button("✨ Paso 2: Generar Artículo Completo"):
             try:
-                with st.spinner("Creando contenido..."):
+                with st.spinner("Redactando post optimizado..."):
                     prompt_art = f"""
-                    Actúe como experto SEO. Idioma: ESPAÑOL NEUTRO. Tema: '{seleccion}'.
-                    Entregue un JSON con: h1, slug, meta, intro, desarrollo (HTML), conclusion, 
-                    faq (q y a), social (ig, x), 
-                    canva_prompts: [3 prompts detallados en inglés para generar imágenes artísticas en Canva Magic Media],
-                    alt_texts: [3 textos alt en español].
+                    Eres un redactor SEO senior. Escribe en ESPAÑOL NEUTRO sobre '{seleccion}'.
+                    Regla: No uses voseo ni regionalismos.
+                    Devuelve un JSON con:
+                    - h1, slug, meta (150 carac).
+                    - intro, desarrollo (HTML con h2), conclusion.
+                    - faq: [{{q: pregunta, a: respuesta}}] (3 items).
+                    - img_prompts: [3 prompts en inglés para imágenes realistas].
+                    - alt_texts: [3 textos alt en español].
+                    - social: {{ig: post, x: hilo}}.
                     """
-                    res_art = client.chat.completions.create(
+                    response_art = client.chat.completions.create(
                         messages=[{"role": "user", "content": prompt_art}],
                         model=st.session_state.active_model,
                         response_format={"type": "json_object"}
                     )
-                    data = json.loads(res_art.choices[0].message.content)
+                    art = json.loads(limpiar_json(response_art.choices[0].message.content))
 
-                    # --- IMÁGENES AUTOMÁTICAS (FLUX) ---
-                    # Esto asegura que el HTML no esté vacío
-                    def get_img(p, s):
+                    # --- LÓGICA DE IMÁGENES ---
+                    def img_url(p, seed):
                         p_enc = urllib.parse.quote(p)
-                        return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={s}&model=flux"
+                        return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={seed}&model=flux"
 
-                    imgs = [get_img(data['canva_prompts'][i], i+99) for i in range(3)]
-                    
-                    # Marcado Schema
-                    faq_entities = [f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in data['faq']]
-                    schema_code = f"""<script type="application/ld+json">{{ "@context": "https://schema.org", "@type": "Article", "headline": "{data['h1']}", "image": "{imgs[0]}", "author": {{ "@type": "Person", "name": "Admin" }} }}</script>
-<script type="application/ld+json">{{ "@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{", ".join(faq_entities)}] }}</script>"""
+                    imgs = [img_url(art['img_prompts'][i], i+10) for i in range(3)]
 
-                    html_blogger = f"""{schema_code}
-<div class="separator" style="text-align: center;"><img src="{imgs[0]}" alt="{data['alt_texts'][0]}" style="width:100%; border-radius:12px;"/></div>
-<p>{data['intro']}</p>
-<div class="separator" style="text-align: center;"><img src="{imgs[1]}" alt="{data['alt_texts'][1]}" style="width:100%; border-radius:12px; margin:20px 0;"/></div>
-{data['desarrollo']}
-<div class="separator" style="text-align: center;"><img src="{imgs[2]}" alt="{data['alt_texts'][2]}" style="width:100%; border-radius:12px; margin-top:20px;"/></div>
-<p>{data['conclusion']}</p>
-<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in data['faq']])}</div>"""
+                    # --- SCHEMA JSON-LD ---
+                    faq_json = ", ".join([f'{{"@type":"Question","name":"{f["q"]}","acceptedAnswer":{{"@type":"Answer","text":"{f["a"]}"}}}}' for f in art['faq']])
+                    schema = f"""
+<script type="application/ld+json">
+{{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "{art['h1']}",
+  "description": "{art['meta']}",
+  "image": "{imgs[0]}",
+  "author": {{ "@type": "Person", "name": "Admin" }}
+}}
+</script>
+<script type="application/ld+json">
+{{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [{faq_json}]
+}}
+</script>"""
 
-                    # --- TABS DE RESULTADO ---
-                    t1, t2, t3 = st.tabs(["📝 Blogger HTML", "🎨 Guía Canva Pro", "📸 Social"])
-                    
-                    with t1:
-                        st.download_button("💾 Descargar HTML", html_blogger, file_name=f"{data['slug']}.html")
-                        st.markdown(html_blogger, unsafe_allow_html=True)
-                        st.code(html_blogger, language="html")
-                    
-                    with t2:
-                        st.subheader("🖼️ Crea imágenes Pro en Canva")
-                        st.write("Copia estos prompts en la herramienta **Magic Media** de Canva para un estilo superior:")
-                        for i, p in enumerate(data['canva_prompts']):
-                            st.info(f"**Prompt para Imagen {i+1}:**\n\n{p}")
-                    
-                    with t3:
-                        st.write("**Instagram:**", data['social']['ig'])
-                        st.write("**X:**", data['social']['x'])
+                    # --- HTML FINAL ---
+                    html = f"""{schema}
+<div class="separator" style="text-align: center;"><img src="{imgs[0]}" alt="{art['alt_texts'][0]}" style="width:100%; border-radius:10px;"/></div>
+<p>{art['intro']}</p>
+<div class="separator" style="text-align: center;"><img src="{imgs[1]}" alt="{art['alt_texts'][1]}" style="width:100%; border-radius:10px; margin:20px 0;"/></div>
+{art['desarrollo']}
+<div class="separator" style="text-align: center;"><img src="{imgs[2]}" alt="{art['alt_texts'][2]}" style="width:100%; border-radius:10px; margin-top:20px;"/></div>
+<p>{art['conclusion']}</p>
+<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in art['faq']])}</div>
+"""
 
-            except Exception as e: st.error(f"Error: {e}")
+                    # --- MOSTRAR RESULTADOS ---
+                    tab1, tab2 = st.tabs(["📝 Blogger HTML", "📸 Redes Sociales"])
+                    with tab1:
+                        c1, c2 = st.columns([1, 2])
+                        with c1:
+                            st.text_input("Título H1", art['h1'])
+                            st.text_area("Meta Descripción", art['meta'])
+                            st.download_button("💾 Bajar HTML", html, file_name=f"{art['slug']}.html")
+                        with c2:
+                            st.markdown(html, unsafe_allow_html=True)
+                        st.divider()
+                        st.subheader("Código para copiar en Blogger")
+                        st.code(html, language="html")
+                    
+                    with tab2:
+                        st.subheader("Instagram")
+                        st.write(art['social']['ig'])
+                        st.subheader("X (Twitter)")
+                        st.write(art['social']['x'])
+
+            except Exception as e:
+                st.error(f"Error en redacción: {e}")
+
+else:
+    st.info("Por favor, ingresa tu API Key de Groq en la barra lateral para comenzar.")
