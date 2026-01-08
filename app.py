@@ -30,20 +30,17 @@ if api_key:
     else:
         st.sidebar.error("No se encontró el modelo.")
 
-st.title("🚀 Hub SEO Internacional con IA Visual (Múltiples Imágenes)")
-st.markdown("Generación de artículos en **español neutro** con **3 imágenes automáticas**.")
+st.title("🚀 Hub SEO Internacional con Imágenes Automáticas")
+st.markdown("Generación de artículos en **español neutro** con **3 imágenes reales** integradas.")
 
-idea_usuario = st.text_input("¿Qué tema desea investigar?", placeholder="Ej: Las maravillas del océano profundo")
+idea_usuario = st.text_input("¿Sobre qué tema desea investigar?", placeholder="Ej: Avances en energía renovable")
 
 if idea_usuario and api_key and 'model' in locals():
     try:
+        # PASO 1: KEYWORDS
         if 'kw_data' not in st.session_state:
             with st.spinner("Analizando métricas..."):
-                prompt_kw = f"""Actúe como una herramienta SEO profesional. 
-                Para el tema '{idea_usuario}', genere 5 palabras clave de cola larga.
-                Estime volumen global y dificultad. Devuelva SOLO JSON:
-                {{"data": [{{"kw": "ejemplo", "vol": "1k", "dif": "20%"}}]}}"""
-                
+                prompt_kw = f"Actúe como experto SEO. Para '{idea_usuario}', genere 5 long-tail keywords. Devuelva SOLO JSON: {{"data": [{{"kw": "ejemplo", "vol": "1k", "dif": "20%"}}]}}"
                 response = model.generate_content(prompt_kw)
                 match = re.search(r'\{.*\}', response.text, re.DOTALL)
                 if match:
@@ -58,20 +55,20 @@ if idea_usuario and api_key and 'model' in locals():
             opciones = [item['kw'] for item in st.session_state.kw_data]
             seleccion = st.selectbox("Seleccione la palabra clave:", opciones)
 
-            if st.button("✨ Generar Contenido y Imágenes"):
-                with st.spinner("Redactando y generando arte visual para 3 imágenes..."):
+            if st.button("✨ Generar Contenido e Imágenes"):
+                with st.spinner("Redactando y creando 3 imágenes..."):
                     prompt_final = f"""
-                    Actúe como experto SEO global y generador de imágenes. Idioma: ESPAÑOL NEUTRO (sin regionalismos ni mención a países).
-                    Tema: '{seleccion}'.
-                    
+                    Actúe como experto SEO global. Idioma: ESPAÑOL NEUTRO. Tema: '{seleccion}'.
+                    No mencione países. 
                     ENTREGUE UN JSON CON:
                     - h1: Título.
                     - slug: URL amigable.
-                    - meta: Meta descripción (150 caracteres).
-                    - html: Contenido en HTML (h2, h3, p, ul).
-                    - img_data: Un array de 3 objetos, cada uno con:
-                        - 'prompt': Una descripción detallada en INGLÉS para generar la imagen (ej: 'underwater coral reef, vibrant colors, fish swimming, photorealistic').
-                        - 'alt': Texto ALT para SEO correspondiente a esa imagen.
+                    - meta: Meta descripción.
+                    - html_intro: Párrafo de introducción.
+                    - html_desarrollo: Cuerpo del post con h2 y párrafos.
+                    - html_conclusion: Conclusión final.
+                    - img_prompts: Lista de 3 frases en INGLÉS para generar imágenes (ej: 'modern solar farm, sunny day, high resolution').
+                    - alt_texts: Lista de 3 textos ALT en español.
                     - ig_post: Post para Instagram.
                     - x_thread: Hilo de Twitter.
                     """
@@ -82,61 +79,24 @@ if idea_usuario and api_key and 'model' in locals():
                     if match_art:
                         data = json.loads(match_art.group())
                         
-                        # --- GENERACIÓN DE IMÁGENES ---
-                        generated_images = []
-                        for i, img_info in enumerate(data.get('img_data', [])):
-                            prompt_img = urllib.parse.quote(img_info['prompt'])
-                            # Usamos un 'seed' diferente para cada imagen para mayor variedad
-                            url_imagen = f"https://pollinations.ai/p/{prompt_img}?width=800&height=450&seed={i+1}&model=flux"
-                            generated_images.append({'url': url_imagen, 'alt': img_info['alt']})
-                        
-                        # --- INSERTAR IMÁGENES EN EL HTML ---
-                        final_html = data.get('html', '')
-                        if generated_images:
-                            # Divide el HTML en 3 partes para insertar las imágenes de forma equitativa
-                            partes = re.split(r'(<h2>.*?</h2>)', final_html, maxsplit=2) # Busca los primeros 2 H2
-                            
-                            html_con_imagenes = ""
-                            img_idx = 0
-                            
-                            # Inserta la primera imagen después del primer párrafo
-                            if len(partes) > 0:
-                                # Busca el primer párrafo después de la intro o del H1
-                                match_p = re.search(r'(<p>.*?</p>)', partes[0], re.DOTALL)
-                                if match_p and img_idx < len(generated_images):
-                                    img_tag = f'<img src="{generated_images[img_idx]["url"]}" alt="{generated_images[img_idx]["alt"]}" style="width:100%; border-radius:8px; margin: 20px 0;"><br><p style="font-style: italic; text-align: center;">{generated_images[img_idx]["alt"]}</p>'
-                                    final_html = final_html.replace(match_p.group(0), match_p.group(0) + img_tag, 1)
-                                    img_idx += 1
-                                # else: si no encuentra párrafo para la primera imagen, la pone al principio
-                                #    if img_idx < len(generated_images):
-                                #        img_tag = f'<img src="{generated_images[img_idx]["url"]}" alt="{generated_images[img_idx]["alt"]}" style="width:100%; border-radius:8px; margin: 20px 0;"><br><p style="font-style: italic; text-align: center;">{generated_images[img_idx]["alt"]}</p>'
-                                #        final_html = img_tag + final_html
-                                #        img_idx += 1
+                        # --- GENERAR LAS 3 URLs DE IMÁGENES ---
+                        imgs = []
+                        for i, p in enumerate(data.get('img_prompts', [])):
+                            encoded_prompt = urllib.parse.quote(p)
+                            # Usamos Pollinations con seed dinámica para que no sean iguales
+                            url = f"https://pollinations.ai/p/{encoded_prompt}?width=1024&height=768&seed={i+50}&model=flux"
+                            imgs.append({"url": url, "alt": data.get('alt_texts', ["Imagen SEO"]*3)[i]})
 
-
-                            # Intenta insertar las imágenes restantes después de los siguientes H2
-                            if img_idx < len(generated_images):
-                                # Busca el texto entre el primer y segundo H2 (si existen)
-                                match_h2 = re.search(r'<h2>.*?</h2>(.*?)<h2>.*?</h2>', final_html, re.DOTALL)
-                                if match_h2:
-                                    # Busca un párrafo dentro de esa sección para insertar la segunda imagen
-                                    match_p_mid = re.search(r'(<p>.*?</p>)', match_h2.group(1), re.DOTALL)
-                                    if match_p_mid and img_idx < len(generated_images):
-                                        img_tag = f'<img src="{generated_images[img_idx]["url"]}" alt="{generated_images[img_idx]["alt"]}" style="width:100%; border-radius:8px; margin: 20px 0;"><br><p style="font-style: italic; text-align: center;">{generated_images[img_idx]["alt"]}</p>'
-                                        final_html = final_html.replace(match_p_mid.group(0), match_p_mid.group(0) + img_tag, 1)
-                                        img_idx += 1
-                                # Si no encuentra otro H2 o párrafo, la inserta al final de la primera parte.
-                                # else:
-                                #    if img_idx < len(generated_images):
-                                #        img_tag = f'<img src="{generated_images[img_idx]["url"]}" alt="{generated_images[img_idx]["alt"]}" style="width:100%; border-radius:8px; margin: 20px 0;"><br><p style="font-style: italic; text-align: center;">{generated_images[img_idx]["alt"]}</p>'
-                                #        final_html += img_tag
-                                #        img_idx += 1
-                            
-                            # Si queda una tercera imagen y no se insertó, se inserta al final
-                            if img_idx < len(generated_images):
-                                img_tag = f'<img src="{generated_images[img_idx]["url"]}" alt="{generated_images[img_idx]["alt"]}" style="width:100%; border-radius:8px; margin: 20px 0;"><br><p style="font-style: italic; text-align: center;">{generated_images[img_idx]["alt"]}</p>'
-                                final_html += img_tag
-
+                        # --- CONSTRUIR EL HTML FINAL ---
+                        # Insertamos las imágenes de forma garantizada entre las secciones
+                        html_completo = f"""
+                        <p>{data.get('html_intro', '')}</p>
+                        <img src="{imgs[0]['url']}" alt="{imgs[0]['alt']}" style="width:100%; border-radius:10px; margin:20px 0;">
+                        {data.get('html_desarrollo', '')}
+                        <img src="{imgs[1]['url']}" alt="{imgs[1]['alt']}" style="width:100%; border-radius:10px; margin:20px 0;">
+                        <img src="{imgs[2]['url']}" alt="{imgs[2]['alt']}" style="width:100%; border-radius:10px; margin:20px 0;">
+                        <p>{data.get('html_conclusion', '')}</p>
+                        """
 
                         t1, t2, t3 = st.tabs(["📝 Blog & SEO", "📸 Instagram", "🐦 X"])
                         
@@ -144,28 +104,26 @@ if idea_usuario and api_key and 'model' in locals():
                             col_a, col_b = st.columns([1, 2])
                             with col_a:
                                 st.subheader("Parámetros SEO")
-                                st.text_input("Título H1", data.get('h1', ''))
-                                st.text_input("URL Slug", data.get('slug', ''))
-                                st.text_area("Meta Descripción", data.get('meta', ''), height=100)
-                                
-                                st.subheader("Imágenes y ALT")
-                                for i, img_info in enumerate(generated_images):
-                                    st.image(img_info['url'], caption=f"Imagen {i+1}", width=150)
-                                    st.text_area(f"ALT Imagen {i+1}", img_info['alt'], height=70, key=f"alt_edit_{i}")
+                                st.text_input("H1", data.get('h1'))
+                                st.text_input("Slug", data.get('slug'))
+                                st.text_area("Meta", data.get('meta'))
+                                for idx, img in enumerate(imgs):
+                                    st.image(img['url'], caption=f"Imagen {idx+1}")
                             
                             with col_b:
                                 st.subheader("Vista Previa")
-                                st.markdown(f"<h1>{data.get('h1', '')}</h1>", unsafe_allow_html=True)
-                                st.markdown(final_html, unsafe_allow_html=True)
+                                st.markdown(f"<h1>{data.get('h1')}</h1>", unsafe_allow_html=True)
+                                st.markdown(html_completo, unsafe_allow_html=True)
                             
                             st.divider()
-                            st.subheader("Código HTML para Blogger")
-                            st.code(final_html, language="html")
-                            
+                            st.subheader("Código HTML para Blogger (¡Copiá esto!)")
+                            st.code(html_completo, language="html")
+
                         with t2:
-                            st.text_area("Instagram/FB", data.get('ig_post', ''), height=400)
-                            
+                            st.text_area("Instagram", data.get('ig_post'), height=300)
                         with t3:
-                            st.text_area("Twitter Thread", data.get('x_thread', ''), height=400)
+                            st.text_area("Twitter", data.get('x_thread'), height=300)
+                    else:
+                        st.error("Error al generar el JSON.")
     except Exception as e:
         st.error(f"Error: {e}")
