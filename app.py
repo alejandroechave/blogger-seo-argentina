@@ -1,51 +1,35 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import json
 import re
 import pandas as pd
 import urllib.parse
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="SEO Master Pro", layout="wide")
+st.set_page_config(page_title="SEO Master Pro - Groq Edition", layout="wide")
 
 with st.sidebar:
     st.title("⚙️ Configuración")
-    api_key = st.text_input("Pegá tu Gemini API Key:", type="password")
+    st.markdown("Obtén tu llave gratis en [Groq Cloud](https://console.groq.com/)")
+    api_key = st.text_input("Pegá tu Groq API Key:", type="password")
     
-def obtener_modelo_disponible():
-    """Busca dinámicamente el mejor modelo disponible en tu cuenta."""
-    try:
-        modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        # Prioridad: 2.0 Flash -> 1.5 Flash -> Pro
-        for target in ['models/gemini-2.0-flash', 'models/gemini-1.5-flash', 'models/gemini-pro']:
-            if target in modelos:
-                return target
-        return modelos[0] if modelos else None
-    except:
-        return None
-
 def limpiar_json(texto):
     match = re.search(r'\{.*\}', texto, re.DOTALL)
     return match.group(0) if match else None
 
 if api_key:
-    genai.configure(api_key=api_key)
-    modelo_final = obtener_modelo_disponible()
-    if modelo_final:
-        model = genai.GenerativeModel(modelo_final)
-        st.sidebar.success(f"Conectado a: {modelo_final}")
-    else:
-        st.sidebar.error("No se detectaron modelos disponibles.")
+    client = Groq(api_key=api_key)
 
-st.title("🚀 Generador SEO Profesional")
+st.title("🚀 Generador SEO (Powered by Groq)")
 st.markdown("Contenido **Español Neutro** | Imágenes | Marcado Schema JSON-LD")
 
 idea_usuario = st.text_input("Tema del artículo:", placeholder="Ej: Guía de inversión en criptomonedas")
 
-if idea_usuario and api_key and 'model' in locals():
+if idea_usuario and api_key:
     if st.button("✨ Generar Contenido Completo"):
         try:
-            with st.spinner("Investigando y redactando (esto ahorra cuota diaria)..."):
+            with st.spinner("Redactando a ultra velocidad con Llama 3..."):
+                # Groq es mucho más rápido, no necesitamos esperar tanto
                 prompt = f"""
                 Actúe como experto SEO Senior. Idioma: ESPAÑOL NEUTRO. Tema: '{idea_usuario}'.
                 Entregue ÚNICAMENTE un JSON con:
@@ -59,8 +43,13 @@ if idea_usuario and api_key and 'model' in locals():
                 }}
                 """
                 
-                response = model.generate_content(prompt)
-                data = json.loads(limpiar_json(response.text))
+                chat_completion = client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model="llama3-70b-8192", # Modelo potente de Meta disponible en Groq
+                    response_format={"type": "json_object"} # Groq soporta modo JSON nativo
+                )
+                
+                data = json.loads(chat_completion.choices[0].message.content)
                 
                 # --- IMÁGENES ---
                 imgs = [f"https://pollinations.ai/p/{urllib.parse.quote(data['img_prompts'][i])}?width=1024&height=768&seed={i+42}" for i in range(3)]
@@ -106,13 +95,10 @@ if idea_usuario and api_key and 'model' in locals():
                     with c2:
                         st.markdown(html_blogger, unsafe_allow_html=True)
                     st.divider()
-                    st.subheader("Copiar código HTML")
                     st.code(html_blogger, language="html")
                 with t2:
-                    st.subheader("Instagram")
-                    st.write(data['social']['ig'])
-                    st.subheader("X")
-                    st.write(data['social']['x'])
+                    st.write("Instagram:", data['social']['ig'])
+                    st.write("X:", data['social']['x'])
 
         except Exception as e:
-            st.error(f"Error: {e}. Si persiste, espera 60 segundos por el límite de cuota.")
+            st.error(f"Error: {e}")
