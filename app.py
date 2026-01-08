@@ -3,22 +3,26 @@ import google.generativeai as genai
 import json
 import re
 import pandas as pd
-import time
 import urllib.parse
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="SEO Hub Pro - Ultra-Fast", layout="wide")
+st.set_page_config(page_title="SEO Master Pro", layout="wide")
 
 with st.sidebar:
     st.title("⚙️ Configuración")
     api_key = st.text_input("Pegá tu Gemini API Key:", type="password")
-    st.warning("⚠️ Límite de cuota: Si ves el error 429, esperá al menos 30 segundos. Esta versión usa la mitad de recursos.")
-
-def buscar_modelo():
+    
+def obtener_modelo_disponible():
+    """Busca dinámicamente el mejor modelo disponible en tu cuenta."""
     try:
-        # Intentamos usar el modelo 1.5 Flash que suele tener cuotas más amplias que el 2.0
-        return 'gemini-1.5-flash'
-    except: return None
+        modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        # Prioridad: 2.0 Flash -> 1.5 Flash -> Pro
+        for target in ['models/gemini-2.0-flash', 'models/gemini-1.5-flash', 'models/gemini-pro']:
+            if target in modelos:
+                return target
+        return modelos[0] if modelos else None
+    except:
+        return None
 
 def limpiar_json(texto):
     match = re.search(r'\{.*\}', texto, re.DOTALL)
@@ -26,65 +30,48 @@ def limpiar_json(texto):
 
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    modelo_final = obtener_modelo_disponible()
+    if modelo_final:
+        model = genai.GenerativeModel(modelo_final)
+        st.sidebar.success(f"Conectado a: {modelo_final}")
+    else:
+        st.sidebar.error("No se detectaron modelos disponibles.")
 
-st.title("🚀 Hub SEO Internacional: Paso Único")
-st.markdown("Generación completa de Keywords, Artículo, Schema e Imágenes en **un solo clic**.")
+st.title("🚀 Generador SEO Profesional")
+st.markdown("Contenido **Español Neutro** | Imágenes | Marcado Schema JSON-LD")
 
-idea_usuario = st.text_input("¿Qué tema desea investigar?", placeholder="Ej: Avances en medicina robótica")
+idea_usuario = st.text_input("Tema del artículo:", placeholder="Ej: Guía de inversión en criptomonedas")
 
-if idea_usuario and api_key:
-    if st.button("✨ Generar Todo el Contenido (Ahorro de Cuota)"):
+if idea_usuario and api_key and 'model' in locals():
+    if st.button("✨ Generar Contenido Completo"):
         try:
-            with st.spinner("Procesando investigación y redacción..."):
-                # PROMPT CONSOLIDADO: Una sola llamada para todo
-                prompt_unico = f"""
-                Actúe como experto SEO Senior. Idioma: ESPAÑOL NEUTRO. Tema base: '{idea_usuario}'.
-                
-                REALICE LO SIGUIENTE Y ENTREGUE ÚNICAMENTE UN JSON:
-                1. 3 Keywords de cola larga con volumen est. y dificultad.
-                2. Un artículo (H1, Slug, Meta descripción).
-                3. Cuerpo del post: Introducción, Desarrollo (con H2) y Conclusión.
-                4. 3 Preguntas Frecuentes (FAQ).
-                5. 3 Prompts de imagen en INGLÉS y 3 Textos ALT en español.
-                6. Posts para IG y X.
-                
-                JSON ESTRUCTURA:
+            with st.spinner("Investigando y redactando (esto ahorra cuota diaria)..."):
+                prompt = f"""
+                Actúe como experto SEO Senior. Idioma: ESPAÑOL NEUTRO. Tema: '{idea_usuario}'.
+                Entregue ÚNICAMENTE un JSON con:
                 {{
-                  "keywords": [{{"kw": "...", "vol": "...", "dif": "..."}}],
-                  "h1": "...", "slug": "...", "meta": "...",
-                  "intro": "...", "desarrollo": "...", "conclusion": "...",
-                  "faq": [{{"q": "...", "a": "..."}}],
-                  "img_prompts": ["...", "...", "..."],
-                  "alt_texts": ["...", "...", "..."],
-                  "social": {{"ig": "...", "x": "..."}}
+                  "h1": "Título", "slug": "url-amigable", "meta": "descripción 150 caracteres",
+                  "intro": "párrafo inicial", "desarrollo": "cuerpo html con h2 y párrafos", "conclusion": "párrafo final",
+                  "faq": [{{"q": "pregunta", "a": "respuesta"}}],
+                  "img_prompts": ["prompt1 inglés", "prompt2 inglés", "prompt3 inglés"],
+                  "alt_texts": ["alt1", "alt2", "alt3"],
+                  "social": {{"ig": "post ig", "x": "hilo x"}}
                 }}
                 """
                 
-                response = model.generate_content(prompt_unico)
-                data_str = limpiar_json(response.text)
+                response = model.generate_content(prompt)
+                data = json.loads(limpiar_json(response.text))
                 
-                if data_str:
-                    data = json.loads(data_str)
-                    
-                    # --- LÓGICA DE IMÁGENES ---
-                    def get_img(p, s):
-                        p_enc = urllib.parse.quote(p)
-                        return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={s}"
-
-                    imgs = [get_img(data['img_prompts'][i], i+100) for i in range(3)]
-                    
-                    # --- SCHEMA JSON-LD ---
-                    faq_list = data.get('faq', [])
-                    faq_schema = ", ".join([f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in faq_list])
-                    
-                    schema_block = f"""
-<script type="application/ld+json">
+                # --- IMÁGENES ---
+                imgs = [f"https://pollinations.ai/p/{urllib.parse.quote(data['img_prompts'][i])}?width=1024&height=768&seed={i+42}" for i in range(3)]
+                
+                # --- SCHEMA ---
+                faq_schema = ", ".join([f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in data['faq']])
+                schema_code = f"""<script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "{data['h1']}",
-  "description": "{data['meta']}",
   "image": "{imgs[0]}",
   "author": {{ "@type": "Person", "name": "Admin" }}
 }}
@@ -97,45 +84,35 @@ if idea_usuario and api_key:
 }}
 </script>"""
 
-                    # --- CONSTRUCCIÓN HTML BLOGGER ---
-                    html_blogger = f"""
-{schema_block}
+                # --- HTML PARA BLOGGER ---
+                html_blogger = f"""{schema_code}
 <div class="separator" style="text-align: center;"><img src="{imgs[0]}" alt="{data['alt_texts'][0]}" style="width:100%; border-radius:12px;"/></div>
 <p>{data['intro']}</p>
 <div class="separator" style="text-align: center;"><img src="{imgs[1]}" alt="{data['alt_texts'][1]}" style="width:100%; border-radius:12px; margin:20px 0;"/></div>
 {data['desarrollo']}
 <div class="separator" style="text-align: center;"><img src="{imgs[2]}" alt="{data['alt_texts'][2]}" style="width:100%; border-radius:12px; margin-top:20px;"/></div>
 <p>{data['conclusion']}</p>
-<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in faq_list])}</div>
-                    """
+<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in data['faq']])}</div>"""
 
-                    # --- VISTA ---
-                    st.success("¡Contenido generado con éxito!")
-                    
-                    tab1, tab2, tab3 = st.tabs(["📝 Blogger & SEO", "📊 Keywords", "📸 Social"])
-                    
-                    with tab1:
-                        c1, c2 = st.columns([1, 2])
-                        with c1:
-                            st.subheader("SEO & Slug")
-                            st.text_input("H1", data['h1'])
-                            st.text_input("Slug", data['slug'])
-                            st.text_area("Meta", data['meta'])
-                            st.download_button("💾 Bajar HTML", html_blogger, file_name=f"{data['slug']}.html")
-                        with c2:
-                            st.markdown(html_blogger, unsafe_allow_html=True)
-                        st.divider()
-                        st.subheader("Código para Blogger")
-                        st.code(html_blogger, language="html")
-                        
-                    with tab2:
-                        st.table(pd.DataFrame(data['keywords']))
-                    
-                    with tab3:
-                        st.subheader("Instagram")
-                        st.write(data['social']['ig'])
-                        st.subheader("X (Twitter)")
-                        st.write(data['social']['x'])
+                # --- VISTA ---
+                t1, t2 = st.tabs(["📝 Blog (Blogger HTML)", "📸 Redes Sociales"])
+                with t1:
+                    c1, c2 = st.columns([1, 2])
+                    with c1:
+                        st.text_input("H1", data['h1'])
+                        st.text_input("Slug", data['slug'])
+                        st.text_area("Meta", data['meta'])
+                        st.download_button("💾 Bajar HTML", html_blogger, file_name=f"{data['slug']}.html")
+                    with c2:
+                        st.markdown(html_blogger, unsafe_allow_html=True)
+                    st.divider()
+                    st.subheader("Copiar código HTML")
+                    st.code(html_blogger, language="html")
+                with t2:
+                    st.subheader("Instagram")
+                    st.write(data['social']['ig'])
+                    st.subheader("X")
+                    st.write(data['social']['x'])
 
         except Exception as e:
-            st.error(f"Error: {e}. Probablemente la cuota diaria se agotó. Intenta mañana o usa otra API Key.")
+            st.error(f"Error: {e}. Si persiste, espera 60 segundos por el límite de cuota.")
