@@ -56,9 +56,9 @@ if idea_usuario and api_key and 'model' in locals():
             if st.button("✨ Generar Contenido Completo"):
                 with st.spinner("Redactando contenido y generando 3 imágenes..."):
                     prompt_final = f"""
-                    Actúe como redactor SEO senior. Idioma: ESPAÑOL NEUTRO. Tema: '{seleccion}'.
+                    Actúe como redactor SEO senior y generador de imágenes. Idioma: ESPAÑOL NEUTRO. Tema: '{seleccion}'.
                     No mencione países ni use modismos locales.
-                    
+
                     ENTREGUE UN JSON ESTRICTO CON:
                     - h1: Título optimizado.
                     - slug: URL amigable (solo minúsculas y guiones).
@@ -66,8 +66,12 @@ if idea_usuario and api_key and 'model' in locals():
                     - html_intro: Párrafo inicial potente.
                     - html_desarrollo: Cuerpo con h2 y párrafos (use comillas simples para citas).
                     - html_conclusion: Conclusión.
-                    - img_prompts: 3 frases en INGLÉS para imágenes (estilo cinemático, alta calidad).
-                    - alt_texts: 3 textos ALT en español neutro.
+                    - img1_prompt_en: Frase en INGLÉS para la primera imagen (estilo cinemático, alta calidad).
+                    - img1_alt_es: Texto ALT en español para la primera imagen.
+                    - img2_prompt_en: Frase en INGLÉS para la segunda imagen.
+                    - img2_alt_es: Texto ALT en español para la segunda imagen.
+                    - img3_prompt_en: Frase en INGLÉS para la tercera imagen.
+                    - img3_alt_es: Texto ALT en español para la tercera imagen.
                     - ig_post: Post para Instagram.
                     - x_thread: Hilo de Twitter.
                     """
@@ -78,20 +82,25 @@ if idea_usuario and api_key and 'model' in locals():
                     if clean_art:
                         data = json.loads(clean_art)
                         
-                        # --- PROCESAMIENTO DE IMÁGENES ---
-                        imgs = []
-                        for i, p in enumerate(data.get('img_prompts', [])):
-                            p_safe = urllib.parse.quote(p)
-                            url = f"https://pollinations.ai/p/{p_safe}?width=1024&height=768&seed={i+99}&model=flux"
-                            imgs.append({"url": url, "alt": data.get('alt_texts', ["Imagen SEO"]*3)[i]})
+                        # --- GENERACIÓN DE IMÁGENES (URLs) ---
+                        base_url_pollinations = "https://pollinations.ai/p/"
+                        image_style = "?width=1024&height=768&seed=42&model=flux" # Usamos un seed fijo para consistencia
 
-                        # --- CONSTRUCCIÓN DEL HTML ---
+                        img1_url = base_url_pollinations + urllib.parse.quote(data.get('img1_prompt_en', 'abstract concept')) + image_style
+                        img2_url = base_url_pollinations + urllib.parse.quote(data.get('img2_prompt_en', 'tech illustration')) + image_style
+                        img3_url = base_url_pollinations + urllib.parse.quote(data.get('img3_prompt_en', 'futuristic scene')) + image_style
+
+                        img1_alt = data.get('img1_alt_es', 'Imagen principal del artículo')
+                        img2_alt = data.get('img2_alt_es', 'Ilustración del concepto')
+                        img3_alt = data.get('img3_alt_es', 'Escena futurista')
+
+                        # --- CONSTRUCCIÓN DEL HTML FINAL (con imágenes) ---
                         html_final = f"""
-                        <img src="{imgs[0]['url']}" alt="{imgs[0]['alt']}" style="width:100%; border-radius:12px; margin-bottom:20px;">
+                        <img src="{img1_url}" alt="{img1_alt}" style="width:100%; border-radius:12px; margin-bottom:20px;">
                         <p>{data.get('html_intro', '')}</p>
-                        <img src="{imgs[1]['url']}" alt="{imgs[1]['alt']}" style="width:100%; border-radius:12px; margin:25px 0;">
+                        <img src="{img2_url}" alt="{img2_alt}" style="width:100%; border-radius:12px; margin:25px 0;">
                         {data.get('html_desarrollo', '')}
-                        <img src="{imgs[2]['url']}" alt="{imgs[2]['alt']}" style="width:100%; border-radius:12px; margin:25px 0;">
+                        <img src="{img3_url}" alt="{img3_alt}" style="width:100%; border-radius:12px; margin:25px 0;">
                         <p>{data.get('html_conclusion', '')}</p>
                         """
 
@@ -105,6 +114,11 @@ if idea_usuario and api_key and 'model' in locals():
                                 st.text_input("Slug (URL)", data.get('slug'), key="slug_res")
                                 st.text_area("Meta descripción", data.get('meta'), height=100)
                                 
+                                st.subheader("Textos ALT de Imágenes")
+                                st.text_area("ALT Imagen 1", img1_alt, height=50)
+                                st.text_area("ALT Imagen 2", img2_alt, height=50)
+                                st.text_area("ALT Imagen 3", img3_alt, height=50)
+
                                 # BOTÓN DE DESCARGA
                                 st.download_button(
                                     label="💾 Descargar HTML del Post",
@@ -116,6 +130,7 @@ if idea_usuario and api_key and 'model' in locals():
                             with col_prev:
                                 st.subheader("Vista Previa")
                                 st.markdown(f"<h1>{data.get('h1')}</h1>", unsafe_allow_html=True)
+                                # Aquí es donde Streamlit debería renderizar el HTML con las imágenes
                                 st.markdown(html_final, unsafe_allow_html=True)
                             
                             st.divider()
@@ -126,4 +141,4 @@ if idea_usuario and api_key and 'model' in locals():
                         with t3: st.text_area("Twitter", data.get('x_thread'), height=350)
 
     except Exception as e:
-        st.error(f"Error detectado: {e}. Por favor, intente de nuevo con el botón 'Generar'.")
+        st.error(f"Error técnico: {e}. Por favor, intente de nuevo.")
