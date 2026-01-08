@@ -5,48 +5,51 @@ import re
 import urllib.parse
 import pandas as pd
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="SEO Master Pro 2026", layout="wide")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="SEO Writer Ultra 2026", layout="wide")
 
-def fix_json_error(text):
-    """Limpia el texto para extraer solo el JSON válido."""
+def fix_json(text):
+    """Extrae y corrige el JSON de la respuesta de la IA."""
     try:
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             content = match.group(0)
+            # Corrige errores comunes de cierre de llaves/paréntesis
             content = content.replace('),', '},').replace(')]', '}]')
             return content
     except:
         return None
     return None
 
-# --- PERSISTENCIA ---
+# --- PERSISTENCIA DE DATOS ---
 if 'kw_list' not in st.session_state: st.session_state.kw_list = None
 if 'art_data' not in st.session_state: st.session_state.art_data = None
 
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("🔑 Acceso")
+    st.title("🔑 Acceso API")
     api_key = st.text_input("Groq API Key:", type="password")
     if api_key:
         client = Groq(api_key=api_key)
 
-st.title("🚀 Redactor SEO de Alto Rendimiento")
+st.title("🚀 Redactor SEO Profesional")
+st.info("Genera artículos de >800 palabras con imágenes que SÍ cargan en Blogger.")
 
-# --- PASO 1: KEYWORDS ---
-st.subheader("1. Investigación de Keywords")
-tema_input = st.text_input("Tema a posicionar:", placeholder="Ej: Estrategias de trading 2026")
+# --- PASO 1: INVESTIGACIÓN DE KEYWORDS ---
+st.subheader("1. Investigación de Keywords Long-Tail")
+tema_input = st.text_input("¿Sobre qué quieres escribir?", placeholder="Ej: Mejores Mini PC 2026")
 
 if tema_input and api_key:
-    if st.button("🔍 Buscar Oportunidades Long-Tail"):
+    if st.button("🔍 Buscar Oportunidades"):
         try:
-            with st.spinner("Buscando keywords..."):
-                prompt_kw = f"Genera 5 keywords long-tail para '{tema_input}'. Devuelve SOLO un JSON: {{'data': [{{'kw': '...', 'vol': '...', 'dif': '...'}}]}}"
+            with st.spinner("Analizando competencia..."):
+                prompt_kw = f"Genera 5 keywords long-tail para '{tema_input}'. Devuelve SOLO JSON: {{'data': [{{'kw': '...', 'vol': '...', 'dif': '...'}}]}}"
                 res = client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt_kw}],
                     model="llama-3.3-70b-versatile",
                     response_format={"type": "json_object"}
                 )
-                st.session_state.kw_list = json.loads(fix_json_error(res.choices[0].message.content))['data']
+                st.session_state.kw_list = json.loads(fix_json(res.choices[0].message.content))['data']
         except Exception as e:
             st.error(f"Error en keywords: {e}")
 
@@ -55,25 +58,26 @@ if tema_input and api_key:
         seleccion = st.selectbox("Selecciona tu Keyword Principal:", [i['kw'] for i in st.session_state.kw_list])
 
         # --- PASO 2: REDACCIÓN ---
-        st.subheader("2. Creación de Contenido")
-        if st.button("📝 Generar Artículo Extenso (+800 palabras)"):
+        st.subheader("2. Redacción del Artículo")
+        if st.button("📝 Generar Artículo Premium"):
             try:
-                with st.spinner("Redactando contenido profundo..."):
-                    prompt_art = f"""Escribe un artículo SEO profesional sobre '{seleccion}'.
+                with st.spinner("Escribiendo guía extensa y optimizada..."):
+                    prompt_art = f"""Escribe un artículo SEO de más de 800 palabras sobre '{seleccion}'.
                     REQUERIMIENTOS:
-                    - Más de 800 palabras con estructura rica (H2, H3).
-                    - Incluye una sección de FAQ con 5 preguntas.
-                    - Genera 5 etiquetas (tags) cortas separadas por comas.
+                    - Estructura con H2 y H3 detallados.
+                    - Sección de FAQ con 5 preguntas.
+                    - Etiquetas (tags) separadas por comas.
+                    - 'img_keyword': SOLO 2 palabras en INGLÉS (ej: 'modern-pc').
                     
                     RESPONDE SOLO EN JSON:
                     {{
-                      "titulo": "H1 Title",
-                      "meta_desc": "Descripción SEO",
-                      "introduccion": "Párrafo intro largo",
-                      "cuerpo": "HTML completo (H2, H3, P, UL, LI)",
-                      "preguntas": "Sección FAQ en HTML",
-                      "img_idea": "3 palabras clave en inglés",
-                      "etiquetas": "tag1, tag2, tag3, tag4, tag5"
+                      "titulo": "...",
+                      "meta": "...",
+                      "intro": "...",
+                      "cuerpo": "HTML completo",
+                      "preguntas": "FAQ HTML",
+                      "img_keyword": "2 palabras ingles",
+                      "etiquetas": "tag1, tag2, tag3"
                     }}"""
                     
                     res_art = client.chat.completions.create(
@@ -81,40 +85,40 @@ if tema_input and api_key:
                         model="llama-3.3-70b-versatile",
                         response_format={"type": "json_object"}
                     )
-                    st.session_state.art_data = json.loads(fix_json_error(res_art.choices[0].message.content))
+                    st.session_state.art_data = json.loads(fix_json(res_art.choices[0].message.content))
             except Exception as e:
                 st.error(f"Error en redacción: {e}")
 
-# --- PASO 3: RESULTADOS ---
+# --- PASO 3: RESULTADOS ORGANIZADOS ---
 if st.session_state.art_data:
     art = st.session_state.art_data
     st.divider()
     
-    tab_html, tab_img, tab_labels = st.tabs(["📄 CÓDIGO BLOGGER", "🖼️ IMAGEN", "🏷️ ETIQUETAS Y META"])
+    tab_html, tab_img, tab_config = st.tabs(["📄 CÓDIGO BLOGGER", "🖼️ IMAGEN (FIX)", "🏷️ ETIQUETAS Y META"])
 
     with tab_html:
-        full_code = f"<h1>{art['titulo']}</h1>\n<p>{art['introduccion']}</p>\n\n{art['cuerpo']}\n<section><h3>Preguntas Frecuentes</h3>{art['preguntas']}</section>"
-        st.success("Copia este código y pégalo en la 'Vista HTML' de Blogger.")
-        st.code(full_code, language="html")
+        # Combinamos todo el HTML
+        full_html = f"<h1>{art['titulo']}</h1>\n<p>{art['intro']}</p>\n\n{art['cuerpo']}\n<section><h3>Preguntas Frecuentes</h3>{art['preguntas']}</section>"
+        st.success("✅ Copia este código en la 'Vista HTML' de tu entrada.")
+        st.code(full_html, language="html")
 
     with tab_img:
-        keyword_limpia = urllib.parse.quote(art['img_idea'].strip())
-        url_imagen = f"https://pollinations.ai/p/{keyword_limpia}?width=1024&height=768&nologo=true"
-        st.image(url_imagen, caption=f"Imagen para: {seleccion}")
-        img_code = f'<div style="text-align:center; margin-bottom:20px;"><img src="{url_imagen}" style="width:100%; max-width:850px; border-radius:15px;" alt="{seleccion}" /></div>'
-        st.subheader("Código de Imagen")
-        st.code(img_code, language="html")
-
-    with tab_labels:
-        st.subheader("📋 Datos de Configuración para Blogger")
-        st.write("**Etiquetas sugeridas:**")
-        st.info(art['etiquetas'])
-        st.caption("Copia estas etiquetas en el apartado 'Etiquetas' de la barra lateral de tu entrada en Blogger.")
+        # Lógica de imagen ultra-estable
+        kw_clean = urllib.parse.quote(art['img_keyword'].strip().replace(" ", "-"))
+        # Añadimos .jpg para forzar la compatibilidad
+        url_final = f"https://pollinations.ai/p/{kw_clean}.jpg?width=1024&height=768&nologo=true"
         
-        st.divider()
-        st.write("**Meta Descripción:**")
-        st.info(art['meta_desc'])
-        st.caption("Copia esto en 'Descripción de búsqueda' en la barra lateral de Blogger.")
+        st.subheader("Previsualización de Imagen")
+        st.image(url_final)
+        
+        st.subheader("Código para la Imagen")
+        img_code = f'<div style="text-align:center; margin-bottom:20px;"><img src="{url_final}" style="width:100%; max-width:850px; border-radius:15px;" alt="{seleccion}" /></div>'
+        st.code(img_code, language="html")
+        st.caption("Pega esto al principio de tu post en Blogger.")
 
-else:
-    st.info("Configura tu API y escribe un tema para empezar.")
+    with tab_config:
+        st.subheader("Configuración Lateral de Blogger")
+        st.write("**Etiquetas:**")
+        st.info(art['etiquetas'])
+        st.write("**Meta Descripción:**")
+        st.info(art['meta'])
