@@ -6,131 +6,117 @@ import pandas as pd
 import urllib.parse
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="SEO Hub Pro - Groq Edition", layout="wide")
+st.set_page_config(page_title="SEO Master Pro - Investigación & Redacción", layout="wide")
 
 with st.sidebar:
     st.title("⚙️ Configuración")
-    st.markdown("1. Obtené tu llave en [Groq Cloud](https://console.groq.com/keys)")
+    st.markdown("Obtené tu llave en [Groq Cloud](https://console.groq.com/keys)")
     api_key = st.text_input("Pegá tu Groq API Key:", type="password")
-    st.info("Groq es 10x más rápido y tiene límites más amplios.")
-
-def limpiar_json(texto):
-    match = re.search(r'\{.*\}', texto, re.DOTALL)
-    return match.group(0) if match else None
 
 if api_key:
     client = Groq(api_key=api_key)
 
-st.title("🚀 Generador SEO Internacional (Groq + Llama 3)")
-st.markdown("Contenido en **Español Neutro** | Imágenes | Marcado Schema JSON-LD")
+st.title("🚀 Hub SEO Internacional: Investigación + Post")
+st.markdown("Análisis de **Keywords Long-Tail** y redacción profesional en **Español Neutro**.")
 
-idea_usuario = st.text_input("¿Qué tema desea investigar hoy?", placeholder="Ej: Estrategias de marketing digital 2026")
+idea_usuario = st.text_input("¿Qué tema desea investigar?", placeholder="Ej: Beneficios del ayuno intermitente")
 
 if idea_usuario and api_key:
-    if st.button("✨ Generar Contenido Profesional"):
-        try:
-            with st.spinner("Redactando a ultra velocidad..."):
-                # Groq es tan rápido que el spinner casi ni se verá
-                prompt = f"""
-                Actúe como experto SEO Senior. Idioma: ESPAÑOL NEUTRO (sin voseo ni regionalismos). 
-                Tema: '{idea_usuario}'.
-                
-                ENTREGUE ÚNICAMENTE UN JSON CON:
-                {{
-                  "h1": "Título", 
-                  "slug": "url-amigable", 
-                  "meta": "descripción de 150 caracteres",
-                  "intro": "párrafo inicial atractivo", 
-                  "desarrollo": "cuerpo html con etiquetas h2 y párrafos", 
-                  "conclusion": "párrafo final",
-                  "faq": [
-                    {{"q": "pregunta 1", "a": "respuesta 1"}},
-                    {{"q": "pregunta 2", "a": "respuesta 2"}},
-                    {{"q": "pregunta 3", "a": "respuesta 3"}}
-                  ],
-                  "img_prompts": ["prompt1 inglés", "prompt2 inglés", "prompt3 inglés"],
-                  "alt_texts": ["alt1", "alt2", "alt3"],
-                  "social": {{"ig": "post para instagram", "x": "hilo para X/Twitter"}}
-                }}
-                """
-                
-                # Llamada a Groq usando Llama 3
-                chat_completion = client.chat.completions.create(
-                    messages=[{"role": "user", "content": prompt}],
-                    model="llama3-70b-8192",
-                    response_format={"type": "json_object"}
-                )
-                
-                data = json.loads(chat_completion.choices[0].message.content)
-                
-                # --- GENERACIÓN DE URLs DE IMAGEN ---
-                def get_img(p, s):
-                    p_enc = urllib.parse.quote(p)
-                    return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={s}&model=flux"
+    # PASO 1: INVESTIGACIÓN DE KEYWORDS
+    if 'kw_data' not in st.session_state or st.session_state.get('last_topic') != idea_usuario:
+        if st.button("🔍 Investigar Keywords Long-Tail"):
+            try:
+                with st.spinner("Analizando mercado SEO..."):
+                    prompt_kw = f"""
+                    Actúe como experto SEO. Para el tema '{idea_usuario}', genere 5 keywords long-tail ganadoras.
+                    Entregue ÚNICAMENTE un JSON con este formato:
+                    {{ "data": [ {{ "kw": "keyword 1", "vol": "1.2k", "dif": "Baja" }}, ... ] }}
+                    """
+                    res_kw = client.chat.completions.create(
+                        messages=[{"role": "user", "content": prompt_kw}],
+                        model="llama3.3-70b-versatile",
+                        response_format={"type": "json_object"}
+                    )
+                    st.session_state.kw_data = json.loads(res_kw.choices[0].message.content)['data']
+                    st.session_state.last_topic = idea_usuario
+            except Exception as e:
+                st.error(f"Error en investigación: {e}")
 
-                imgs = [get_img(data['img_prompts'][i], i+500) for i in range(3)]
-                
-                # --- MARCADO SCHEMA JSON-LD ---
-                faq_entities = [f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in data['faq']]
-                
-                schema_code = f"""
+    # MOSTRAR TABLA Y SELECCIÓN
+    if 'kw_data' in st.session_state:
+        st.subheader("📊 Sugerencias de Keywords Long-Tail")
+        df = pd.DataFrame(st.session_state.kw_data)
+        st.table(df)
+        
+        opciones = [item['kw'] for item in st.session_state.kw_data]
+        seleccion = st.selectbox("Seleccione la Keyword principal para el artículo:", opciones)
+
+        # PASO 2: GENERACIÓN DEL ARTÍCULO
+        if st.button("✨ Generar Post Completo con Schema & Imágenes"):
+            try:
+                with st.spinner("Redactando contenido optimizado..."):
+                    prompt_art = f"""
+                    Actúe como redactor SEO Senior. Idioma: ESPAÑOL NEUTRO. Tema: '{seleccion}'.
+                    ENTREGUE UN JSON ESTRICTO:
+                    {{
+                      "h1": "Título", "slug": "url-amigable", "meta": "descripción",
+                      "intro": "párrafo inicial", "desarrollo": "cuerpo html con h2", "conclusion": "párrafo final",
+                      "faq": [ {{"q": "p1", "a": "r1"}}, {{"q": "p2", "a": "r2"}}, {{"q": "p3", "a": "r3"}} ],
+                      "img_prompts": ["prompt1", "prompt2", "prompt3"],
+                      "alt_texts": ["alt1", "alt2", "alt3"],
+                      "social": {{ "ig": "post", "x": "hilo" }}
+                    }}
+                    """
+                    res_art = client.chat.completions.create(
+                        messages=[{"role": "user", "content": prompt_art}],
+                        model="llama3.3-70b-versatile",
+                        response_format={"type": "json_object"}
+                    )
+                    data = json.loads(res_art.choices[0].message.content)
+
+                    # --- IMÁGENES & HTML ---
+                    def get_img(p, s):
+                        p_enc = urllib.parse.quote(p)
+                        return f"https://pollinations.ai/p/{p_enc}?width=1024&height=768&seed={s}&model=flux"
+
+                    imgs = [get_img(data['img_prompts'][i], i+777) for i in range(3)]
+                    
+                    # Marcado Schema JSON-LD
+                    faq_entities = [f'{{ "@type": "Question", "name": "{f["q"]}", "acceptedAnswer": {{ "@type": "Answer", "text": "{f["a"]}" }} }}' for f in data['faq']]
+                    schema_code = f"""
 <script type="application/ld+json">
-{{
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": "{data['h1']}",
-  "description": "{data['meta']}",
-  "image": "{imgs[0]}",
-  "author": {{ "@type": "Person", "name": "Admin" }}
-}}
+{{ "@context": "https://schema.org", "@type": "Article", "headline": "{data['h1']}", "image": "{imgs[0]}", "author": {{ "@type": "Person", "name": "Admin" }} }}
 </script>
 <script type="application/ld+json">
-{{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [{", ".join(faq_entities)}]
-}}
+{{ "@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{", ".join(faq_entities)}] }}
 </script>"""
 
-                # --- HTML FINAL PARA BLOGGER ---
-                html_blogger = f"""{schema_code}
+                    html_blogger = f"""{schema_code}
 <div class="separator" style="text-align: center;"><img src="{imgs[0]}" alt="{data['alt_texts'][0]}" style="width:100%; border-radius:12px;"/></div>
 <p>{data['intro']}</p>
 <div class="separator" style="text-align: center;"><img src="{imgs[1]}" alt="{data['alt_texts'][1]}" style="width:100%; border-radius:12px; margin:20px 0;"/></div>
 {data['desarrollo']}
 <div class="separator" style="text-align: center;"><img src="{imgs[2]}" alt="{data['alt_texts'][2]}" style="width:100%; border-radius:12px; margin-top:20px;"/></div>
 <p>{data['conclusion']}</p>
-<div class="faq-section">
-    <h2>Preguntas Frecuentes</h2>
-    {''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in data['faq']])}
-</div>"""
+<div class="faq-section"><h2>Preguntas Frecuentes</h2>{''.join([f"<h3>{f['q']}</h3><p>{f['a']}</p>" for f in data['faq']])}</div>"""
 
-                # --- INTERFAZ DE RESULTADOS ---
-                st.success("¡Generado con éxito en segundos!")
-                t1, t2, t3 = st.tabs(["📝 Post Blogger", "📸 Social Media", "📊 SEO Data"])
-                
-                with t1:
-                    col_edit, col_prev = st.columns([1, 2])
-                    with col_edit:
-                        st.text_input("H1", data['h1'])
-                        st.text_input("Slug", data['slug'])
-                        st.text_area("Meta Descripción", data['meta'], height=100)
-                        st.download_button("💾 Bajar archivo .html", html_blogger, file_name=f"{data['slug']}.html")
-                    with col_prev:
-                        st.markdown(f"<h1>{data['h1']}</h1>", unsafe_allow_html=True)
-                        st.markdown(html_blogger, unsafe_allow_html=True)
-                    st.divider()
-                    st.subheader("Código HTML (Pegar en Blogger)")
-                    st.code(html_blogger, language="html")
-                
-                with t2:
-                    st.subheader("Instagram / Facebook")
-                    st.write(data['social']['ig'])
-                    st.subheader("X (Twitter)")
-                    st.write(data['social']['x'])
-                    
-                with t3:
-                    st.json(data)
+                    # --- RESULTADOS ---
+                    t1, t2 = st.tabs(["📝 Blogger HTML", "📸 Social"])
+                    with t1:
+                        c1, c2 = st.columns([1, 2])
+                        with c1:
+                            st.text_input("H1", data['h1'])
+                            st.text_input("Slug", data['slug'])
+                            st.text_area("Meta", data['meta'])
+                            st.download_button("💾 Bajar HTML", html_blogger, file_name=f"{data['slug']}.html")
+                        with c2:
+                            st.markdown(html_blogger, unsafe_allow_html=True)
+                        st.divider()
+                        st.code(html_blogger, language="html")
+                    with t2:
+                        st.subheader("Redes Sociales")
+                        st.write("**Instagram:**", data['social']['ig'])
+                        st.write("**X (Twitter):**", data['social']['x'])
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+            except Exception as e:
+                st.error(f"Error en generación: {e}")
