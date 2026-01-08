@@ -4,6 +4,7 @@ import json
 import re
 import urllib.parse
 import pandas as pd
+import random
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="SEO Writer Ultra 2026", layout="wide")
@@ -14,7 +15,6 @@ def fix_json(text):
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             content = match.group(0)
-            # Corrige errores comunes de cierre de llaves/paréntesis
             content = content.replace('),', '},').replace(')]', '}]')
             return content
     except:
@@ -24,6 +24,7 @@ def fix_json(text):
 # --- PERSISTENCIA DE DATOS ---
 if 'kw_list' not in st.session_state: st.session_state.kw_list = None
 if 'art_data' not in st.session_state: st.session_state.art_data = None
+if 'img_seed' not in st.session_state: st.session_state.img_seed = random.randint(1, 99999)
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -33,7 +34,7 @@ with st.sidebar:
         client = Groq(api_key=api_key)
 
 st.title("🚀 Redactor SEO Profesional")
-st.info("Genera artículos de >800 palabras con imágenes que SÍ cargan en Blogger.")
+st.markdown("Generación de artículos extensos con imágenes de alta disponibilidad.")
 
 # --- PASO 1: INVESTIGACIÓN DE KEYWORDS ---
 st.subheader("1. Investigación de Keywords Long-Tail")
@@ -61,13 +62,15 @@ if tema_input and api_key:
         st.subheader("2. Redacción del Artículo")
         if st.button("📝 Generar Artículo Premium"):
             try:
-                with st.spinner("Escribiendo guía extensa y optimizada..."):
+                # Cambiamos la semilla cada vez que se genera un artículo nuevo
+                st.session_state.img_seed = random.randint(1, 99999)
+                with st.spinner("Escribiendo guía extensa..."):
                     prompt_art = f"""Escribe un artículo SEO de más de 800 palabras sobre '{seleccion}'.
                     REQUERIMIENTOS:
                     - Estructura con H2 y H3 detallados.
                     - Sección de FAQ con 5 preguntas.
                     - Etiquetas (tags) separadas por comas.
-                    - 'img_keyword': SOLO 2 palabras en INGLÉS (ej: 'modern-pc').
+                    - 'img_keyword': SOLO 2 palabras en INGLÉS (ej: 'office-laptop').
                     
                     RESPONDE SOLO EN JSON:
                     {{
@@ -94,27 +97,33 @@ if st.session_state.art_data:
     art = st.session_state.art_data
     st.divider()
     
-    tab_html, tab_img, tab_config = st.tabs(["📄 CÓDIGO BLOGGER", "🖼️ IMAGEN (FIX)", "🏷️ ETIQUETAS Y META"])
+    tab_html, tab_img, tab_config = st.tabs(["📄 CÓDIGO BLOGGER", "🖼️ IMAGEN (SOLUCIÓN)", "🏷️ ETIQUETAS Y META"])
 
     with tab_html:
-        # Combinamos todo el HTML
         full_html = f"<h1>{art['titulo']}</h1>\n<p>{art['intro']}</p>\n\n{art['cuerpo']}\n<section><h3>Preguntas Frecuentes</h3>{art['preguntas']}</section>"
-        st.success("✅ Copia este código en la 'Vista HTML' de tu entrada.")
+        st.success("Copia este código en la 'Vista HTML' de tu entrada.")
         st.code(full_html, language="html")
 
     with tab_img:
-        # Lógica de imagen ultra-estable
+        st.subheader("🖼️ Control de Imagen")
+        
+        # Lógica de URL ultra-limpia con semilla aleatoria
         kw_clean = urllib.parse.quote(art['img_keyword'].strip().replace(" ", "-"))
-        # Añadimos .jpg para forzar la compatibilidad
-        url_final = f"https://pollinations.ai/p/{kw_clean}.jpg?width=1024&height=768&nologo=true"
+        url_final = f"https://pollinations.ai/p/{kw_clean}.jpg?width=1024&height=768&seed={st.session_state.img_seed}&nologo=true"
         
-        st.subheader("Previsualización de Imagen")
-        st.image(url_final)
+        # Botón para forzar una nueva imagen si no gusta la actual
+        if st.button("🔄 Generar otra versión de imagen"):
+            st.session_state.img_seed = random.randint(1, 99999)
+            st.rerun()
+
+        st.image(url_final, caption="Previsualización de la imagen generada")
         
+        st.divider()
         st.subheader("Código para la Imagen")
-        img_code = f'<div style="text-align:center; margin-bottom:20px;"><img src="{url_final}" style="width:100%; max-width:850px; border-radius:15px;" alt="{seleccion}" /></div>'
+        # Quitamos loading="lazy" para asegurar carga inmediata
+        img_code = f'<div style="text-align:center; margin-bottom:20px;"><img src="{url_final}" style="width:100%; max-width:850px; border-radius:15px;" alt="{art["titulo"]}" /></div>'
         st.code(img_code, language="html")
-        st.caption("Pega esto al principio de tu post en Blogger.")
+        st.caption("Pega este código al principio de tu post en Blogger (Vista HTML).")
 
     with tab_config:
         st.subheader("Configuración Lateral de Blogger")
